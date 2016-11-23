@@ -1,4 +1,4 @@
-{-# LANGUAGE NamedFieldPuns #-}
+{-# LANGUAGE NamedFieldPuns, FlexibleInstances #-}
 
 module Avail where
 
@@ -61,6 +61,13 @@ comp2list _ = error "only flatten compositions"
 
 type Lattice = Set Expr
 type TFun = Lattice -> Lattice
+
+-- First go at generalizing lattice elements
+class (Ord a, Eq a) => Lat a where
+  leastUpperBound :: Lat a => a -> a -> a
+
+instance Lat (Set Expr) where
+  leastUpperBound = S.intersection
 
 exprs :: Expr -> Lattice
 exprs expr = case expr of
