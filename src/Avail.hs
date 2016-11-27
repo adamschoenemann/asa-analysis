@@ -52,7 +52,7 @@ ppStmt n stmt = case stmt of
 instance Show Stmt where
   show = ppStmt 0
 
-
+-- Composition to list of statements
 comp2list :: Stmt -> [Stmt]
 comp2list (Comp s1 c2@(Comp s2 s3)) = s1 : comp2list c2
 comp2list (Comp c1@(Comp s1 s2) s3) = comp2list c1 ++ [s3]
@@ -101,16 +101,24 @@ stmtToTFun stmt = case stmt of
   While e s -> avail e
 
 type ID = Int
-data Node a = Node ID a deriving (Show)
+data Node       a = Node ID a deriving (Show)
+type Nodes      a = Map ID (Node a)
+type ConfPoint  a = Node a
+type ConfPoints a = Map ID (ConfPoint a)
 
+-- control flow graph
 data CFG a = CFG
-  { nodes :: Map ID (Node a)
-  , edges :: Set (ID,ID)
-  , src   :: ID
-  , sink  :: ID
+  { nodes  :: Nodes a --Map ID (Node a)
+  , edges  :: Set (ID,ID)
+  , src    :: ID
+  , sink   :: ID
+  , cpoints :: ConfPoints a
   } deriving (Show)
 
-data CFGNode = Cond Expr | CFGStmt Stmt deriving (Show)
+
+data CFGNode = Cond Expr
+             | CFGStmt Stmt
+             | ConfPoint Expr deriving (Show)
 
 prog1 :: Stmt
 prog1 =
@@ -138,7 +146,7 @@ cfg1 :: CFG CFGNode
 cfg1 = CFG {
       nodes = nodes
     , edges = S.fromList edges
-    , src = 0, sink = 7
+    , src = 0, sink = 7, cpoints = []
   } where
       nodes = M.fromList $ zipWith (\i a -> (i, Node i a)) [0..]
                 [ CFGStmt $ Ass "x" (Var "a" `Mul` Var "b")   -- x := a * b  (0)
@@ -157,13 +165,15 @@ cfg1' = cfg prog1
 cfg2 :: CFG CFGNode
 cfg2 = cfg prog2
 
-type Edges = [(ID,ID)]
+type Edges      = [(ID,ID)]
+type CPoints  n  = Map ID (Node n)
 type CFGState a = State (ID, [Node CFGNode], Edges) a
 
 cfg :: Stmt -> CFG CFGNode
 cfg s =
   let (_,(sink, ns, es)) = runState (computeCFG s) (0, [], [])
-  in  CFG { nodes = fromNodes ns, edges = S.fromList $ es, src = 0, sink = sink } where
+  in  CFG { nodes = fromNodes ns, edges = S.fromList $ es, src = 0, sink = sink,
+          cpoints = []} where --TODO: cpoints: Map ID (ConfPoint CFGNode)
     fromNodes nodes = M.fromList $ map (\(Node i n) -> (i, Node i n)) nodes
 
 computeCFG :: Stmt -> CFGState [ID]
