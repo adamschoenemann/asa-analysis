@@ -16,7 +16,7 @@ build-type:          Simple
 cabal-version:       >=1.10
 
 library
-  exposed-modules:     Avail
+  exposed-modules:     Avail, Data.Graph
   -- other-modules:
   -- other-extensions:
   build-depends:       base >=4.7 && <4.8, mtl, containers

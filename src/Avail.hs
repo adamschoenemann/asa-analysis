@@ -10,6 +10,7 @@ import qualified Data.Set as S
 import Control.Monad.State
 import Data.Functor ((<$>))
 import Data.List (sort)
+import Data.Graph
 
 import Debug.Trace
 
@@ -44,12 +45,12 @@ data Stmt
   deriving (Eq, Ord)
 
 ppStmt n stmt = case stmt of
-  Skip -> "skip"
-  Ass v e -> v ++ " := " ++ ppExpr e
+  Skip -> "skip;"
+  Ass v e -> v ++ " := " ++ ppExpr e ++ ";"
   ITE e s1 s2 -> "if " ++ ppExpr e ++ " then " ++ ppStmt n s1 ++ " else " ++ ppStmt n s2
-  Comp s1 s2 -> let ident = replicate n '\t' in ppStmt n s1 ++ ";\n" ++ ident ++ ppStmt n s2
+  Comp s1 s2 -> let ident = replicate n '\t' in ppStmt n s1 ++ "\n" ++ ident ++ ppStmt n s2
   While e s  -> let ident = replicate (n+1) '\t'
-                in  "while (" ++ ppExpr e ++ ") do (\n" ++ ident ++ ppStmt (n+1) s ++ ";\n)"
+                in  "while (" ++ ppExpr e ++ ") do (\n" ++ ident ++ ppStmt (n+1) s ++ "\n)"
 
 instance Show Stmt where
   show = ppStmt 0
@@ -102,22 +103,43 @@ stmtToTFun stmt = case stmt of
   Comp s s' -> id
   While e s -> avail e
 
-type ID = Int
-data Node       a = Node ID a deriving (Show)
-type Nodes      a = Map ID (Node a)
+
+
 
 -- control flow graph
-data CFG a = CFG
-  { nodes  :: Nodes a --Map ID (Node a)
-  , edges  :: Set (ID,ID)
-  , src    :: ID
-  , sink   :: ID
-  } deriving (Show)
+data CFGNodeData
+  = Cond Expr
+  | CFGStmt Stmt
+  | ConfPoint deriving (Show)
+
+-- could also just be Maybe Bool
+data CFGEdgeData
+  = NoData
+  | Branch Bool
+  deriving (Ord, Eq)
+
+edToMaybe :: CFGEdgeData -> Maybe Bool
+edToMaybe NoData     = Nothing
+edToMaybe (Branch t) = Just t
+
+instance Show CFGEdgeData where
+  show NoData = ""
+  show (Branch t) = show t
+
+cfgGvzer =
+  let vizNode g (Node nid x) =
+        case x of
+          Cond exp -> (show nid) ++ " [shape=diamond,label=\"" ++ (ppExpr exp)  ++ "\"]"
+          CFGStmt stmt -> (show nid) ++ " [shape=box,label=\"" ++ (ppStmt 0 stmt) ++ "\"]"
+          ConfPoint -> show nid
+      vizEdge g (Edge (u,v) ed) =
+        let attrs = maybe "" (\t -> " [label=\"" ++ (show t) ++ "\"]") (edToMaybe ed)
+        in  show u ++ " -> " ++ show v ++ attrs
+  in Graphvizer { vizNode = vizNode, vizEdge = vizEdge }
 
 
-data CFGData = Cond Expr
-             | CFGStmt Stmt
-             | ConfPoint deriving (Show)
+vizCfg g name = toGraphviz g name cfgGvzer
+writeVizCfg g name = writeFile ("./graphviz/" ++ name ++ ".dot") (vizCfg g name)
 
 prog1 :: Stmt
 prog1 =
@@ -141,10 +163,10 @@ prog2 =
   Ass "a" (Const 20) `Comp`
   Ass "u" (Var "a" `Mul` Var "b"))))
 
-cfg1 :: CFG CFGData
-cfg1 = CFG {
+cfg1 :: Graph CFGNodeData CFGEdgeData
+cfg1 = Graph {
       nodes = nodes
-    , edges = S.fromList edges
+    , edges = S.fromList $ map (\(u,v,d) -> Edge (u,v) d) edges
     , src = 0, sink = 7
   } where
       nodes = M.fromList $ zipWith (\i a -> (i, Node i a)) [0..]
@@ -157,80 +179,86 @@ cfg1 = CFG {
                 , CFGStmt $ Ass "a" (Const 20)                -- a := 20 (5)
                 , CFGStmt $ Ass "u" (Var "a" `Mul` Var "b")   -- u := a * b (6)
                 ]
-      edges = [(0,1), (1,2), (1,3), (3,4), (2,4), (4,5), (5,6), (6,7)]
+      no = NoData
+      edges = [(0,1,no), (1,2, Branch True), (1,3, Branch False), (3,4,no), (2,4,no), (4,5,no), (5,6,no), (6,7,no)]
 
-cfg1' :: CFG CFGData
+cfg1' :: Graph CFGNodeData CFGEdgeData
 cfg1' = cfg prog1
 
-cfg2 :: CFG CFGData
+cfg2 :: Graph CFGNodeData CFGEdgeData
 cfg2 = cfg prog2
 
-type Edges      = [(ID,ID)]
+type Edges      = [Edge CFGEdgeData]
 type CPoints  n  = Map ID (Node n)
 type NextID = ID
-type CFGState a = State (NextID, [Node CFGData], Edges) a
+type CFGState a = State (NextID, [Node CFGNodeData], Edges) a
 
-cfg :: Stmt -> CFG CFGData
+cfg :: Stmt -> Graph CFGNodeData CFGEdgeData
 cfg s =
-  let (sink,(_, ns, es)) = runState (computeCFG s) (0, [], [])
-  in  CFG { nodes = fromNodes ns, edges = S.fromList $ es, src = 0, sink = sink }
+  let (sink,(_, ns, es)) = runState (computeGraph s) (0, [], [])
+  in  Graph { nodes = fromNodes ns, edges = S.fromList $ es, src = 0, sink = sink }
     where
       fromNodes nodes = M.fromList $ map (\(Node i n) -> (i, Node i n)) nodes
 
 -- Return value is ID of last created node
 -- The state contains the ID of the *next* node!
-computeCFG :: Stmt -> CFGState ID
-computeCFG s' =
+computeGraph :: Stmt -> CFGState ID
+computeGraph s' =
   case s' of
     Skip -> pred . fst' <$> get -- pred is (\x -> x - 1)
     Ass v e -> newNode (CFGStmt $ Ass v e)
     ITE e tr fl -> do
       condi <- newNode (Cond e) -- cond index
-      trid <- computeCFG tr -- true index
-      flid <- computeCFG fl -- false index
-      newEdge condi trid
-      newEdge condi flid
+      trid <- computeGraph tr -- true index
+      flid <- computeGraph fl -- false index
+      newEdge condi trid (Branch True)
+      newEdge condi flid (Branch False)
       confid <- newNode ConfPoint
-      newEdge trid confid
-      newEdge flid confid
+      newEdge' trid confid
+      newEdge' flid confid
       return confid
     Comp s1 s2 -> do
-      u <- computeCFG s1
+      u <- computeGraph s1
+      let ed = case s1 of
+                    While _ _ -> Branch False
+                    _         -> NoData
       v <- fst' <$> get
-      newEdge u v
-      computeCFG s2
+      newEdge u v ed
+      computeGraph s2
     While e s -> do
-      confid <- newNode ConfPoint
-      u <- newNode (Cond e)
-      newEdge confid u
-      newEdge u (u+1) -- edge from condition to true branch
-      v <- computeCFG s -- the end of the true branch
-      newEdge v confid
-      return u
+      confid <- newNode ConfPoint -- confluence id
+      condid <- newNode (Cond e)  -- conditional id
+      newEdge' confid condid
+      newEdge condid (condid+1) (Branch True) -- edge from condition to true branch
+      trid <- computeGraph s -- the end of the true branch
+      newEdge' trid confid
+      return condid
   where
     fst' (a,_,_) = a
-    newNode :: CFGData -> CFGState ID
+    newNode :: CFGNodeData -> CFGState ID
     newNode n = do
       (i,ns,es) <- get
       let n' = Node i n
       put (i+1,n':ns,es)
       return $ i
-    newEdge :: ID -> ID -> CFGState ()
-    newEdge u v = do
+    newEdge :: ID -> ID -> CFGEdgeData -> CFGState ()
+    newEdge u v ed = do
       (i, ns, es) <- get
-      put (i, ns, (u,v):es)
+      let edge = Edge (u,v) ed
+      put (i, ns, edge:es)
+    newEdge' u v = newEdge u v NoData
 
 data ProgPoint =
-  PP { dependent :: Set ID, node :: CFGData }
+  PP { dependent :: Set ID, node :: CFGNodeData }
      deriving (Show)
 
-cfgToProgP :: CFG CFGData -> [ProgPoint]
-cfgToProgP (CFG {nodes, edges, src, sink}) =
+cfgToProgP :: Graph CFGNodeData CFGEdgeData -> [ProgPoint]
+cfgToProgP (Graph {nodes, edges, src, sink}) =
   map nodeToProgP (M.elems nodes) where
     nodeToProgP node@(Node i inner) =
       let dependent = incoming i
       in  PP { dependent = dependent, node = inner }
-    incoming i = S.map fst . S.filter ((i == ) . snd) $ edges
+    incoming i = S.map fst . S.filter ((i == ) . snd) $ S.map endpoints edges
 
 
 type Equation = [Lattice] -> Lattice
