@@ -11,6 +11,8 @@ import Control.Monad.State
 import Data.Functor ((<$>))
 import Data.List (sort)
 
+import Debug.Trace
+
 data Expr
   = Add Expr Expr
   | Sub Expr Expr
@@ -103,8 +105,6 @@ stmtToTFun stmt = case stmt of
 type ID = Int
 data Node       a = Node ID a deriving (Show)
 type Nodes      a = Map ID (Node a)
-type ConfPoint  a = Node a
-type ConfPoints a = Map ID (ConfPoint a)
 
 -- control flow graph
 data CFG a = CFG
@@ -112,13 +112,12 @@ data CFG a = CFG
   , edges  :: Set (ID,ID)
   , src    :: ID
   , sink   :: ID
-  , cpoints :: ConfPoints a
   } deriving (Show)
 
 
-data CFGNode = Cond Expr
+data CFGData = Cond Expr
              | CFGStmt Stmt
-             | ConfPoint Expr deriving (Show)
+             | ConfPoint deriving (Show)
 
 prog1 :: Stmt
 prog1 =
@@ -133,76 +132,84 @@ prog1 =
 
 prog2 :: Stmt
 prog2 =
-  Ass "x" (Var "a" `Mul` Var "b") `Comp`
-  (While ((Const 20 `Mul` Var "c") `Gt` (Var "a" `Mul` Var "b"))
+  Ass "x" (Var "a" `Mul` Var "b") `Comp` (
+  ((While ((Const 20 `Mul` Var "c") `Gt` (Var "a" `Mul` Var "b"))
        ((Ass "a" (Const 20 `Add` Var "a")) `Comp`
        (Ass "c" (Var "c" `Sub` Const 1)))
-  ) `Comp`
+  ) `Comp` (
   Ass "z" (Const 20 `Mul` Const 30) `Comp`
   Ass "a" (Const 20) `Comp`
-  Ass "u" (Var "a" `Mul` Var "b")
+  Ass "u" (Var "a" `Mul` Var "b"))))
 
-cfg1 :: CFG CFGNode
+cfg1 :: CFG CFGData
 cfg1 = CFG {
       nodes = nodes
     , edges = S.fromList edges
-    , src = 0, sink = 7, cpoints = []
+    , src = 0, sink = 7
   } where
       nodes = M.fromList $ zipWith (\i a -> (i, Node i a)) [0..]
                 [ CFGStmt $ Ass "x" (Var "a" `Mul` Var "b")   -- x := a * b  (0)
                 , Cond ((Var "a" `Mul` Var "b") `Gt` (Const 20 `Mul` Var "c")) -- if (a * b > 20 * c) (1)
                 , CFGStmt $ Ass "y" (Const 20 `Add` Var "a")  -- y := 20 + a (2)
                 , CFGStmt $ Ass "y" (Const 30 `Add` Var "c")  -- y := 30 + c (3)
+                , ConfPoint
                 , CFGStmt $ Ass "z" (Const 20 `Mul` Const 30) -- z := 20 * 30 (4)
                 , CFGStmt $ Ass "a" (Const 20)                -- a := 20 (5)
                 , CFGStmt $ Ass "u" (Var "a" `Mul` Var "b")   -- u := a * b (6)
                 ]
-      edges = [(0,1), (1,2), (1,3), (3,4), (2,4), (4,5), (5,6)]
+      edges = [(0,1), (1,2), (1,3), (3,4), (2,4), (4,5), (5,6), (6,7)]
 
-cfg1' :: CFG CFGNode
+cfg1' :: CFG CFGData
 cfg1' = cfg prog1
 
-cfg2 :: CFG CFGNode
+cfg2 :: CFG CFGData
 cfg2 = cfg prog2
 
 type Edges      = [(ID,ID)]
 type CPoints  n  = Map ID (Node n)
-type CFGState a = State (ID, [Node CFGNode], Edges) a
+type NextID = ID
+type CFGState a = State (NextID, [Node CFGData], Edges) a
 
-cfg :: Stmt -> CFG CFGNode
+cfg :: Stmt -> CFG CFGData
 cfg s =
-  let (_,(sink, ns, es)) = runState (computeCFG s) (0, [], [])
-  in  CFG { nodes = fromNodes ns, edges = S.fromList $ es, src = 0, sink = sink,
-          cpoints = []} where --TODO: cpoints: Map ID (ConfPoint CFGNode)
-    fromNodes nodes = M.fromList $ map (\(Node i n) -> (i, Node i n)) nodes
+  let (sink,(_, ns, es)) = runState (computeCFG s) (0, [], [])
+  in  CFG { nodes = fromNodes ns, edges = S.fromList $ es, src = 0, sink = sink }
+    where
+      fromNodes nodes = M.fromList $ map (\(Node i n) -> (i, Node i n)) nodes
 
-computeCFG :: Stmt -> CFGState [ID]
+-- Return value is ID of last created node
+-- The state contains the ID of the *next* node!
+computeCFG :: Stmt -> CFGState ID
 computeCFG s' =
   case s' of
-    Skip -> (:[]) . fst' <$> get
-    Ass v e -> (:[]) <$> newNode (CFGStmt $ Ass v e)
+    Skip -> pred . fst' <$> get -- pred is (\x -> x - 1)
+    Ass v e -> newNode (CFGStmt $ Ass v e)
     ITE e tr fl -> do
       condi <- newNode (Cond e) -- cond index
-      -- FIXME: This will crash for nested ifs?
-      trids <- computeCFG tr -- true index
-      flids <- computeCFG fl -- false index
-      mapM (newEdge condi) trids
-      mapM (newEdge condi) flids
-      return $ flids ++ trids
+      trid <- computeCFG tr -- true index
+      flid <- computeCFG fl -- false index
+      newEdge condi trid
+      newEdge condi flid
+      confid <- newNode ConfPoint
+      newEdge trid confid
+      newEdge flid confid
+      return confid
     Comp s1 s2 -> do
       u <- computeCFG s1
-      let v = (maximum u) + 1
-      mapM (flip newEdge $ v) u
+      v <- fst' <$> get
+      newEdge u v
       computeCFG s2
     While e s -> do
+      confid <- newNode ConfPoint
       u <- newNode (Cond e)
-      newEdge u (u+1)
-      v <- computeCFG s
-      mapM (flip newEdge $ u) v
-      return v -- return ref to cond
+      newEdge confid u
+      newEdge u (u+1) -- edge from condition to true branch
+      v <- computeCFG s -- the end of the true branch
+      newEdge v confid
+      return u
   where
     fst' (a,_,_) = a
-    newNode :: CFGNode -> CFGState ID
+    newNode :: CFGData -> CFGState ID
     newNode n = do
       (i,ns,es) <- get
       let n' = Node i n
@@ -214,10 +221,10 @@ computeCFG s' =
       put (i, ns, (u,v):es)
 
 data ProgPoint =
-  PP { dependent :: Set ID, node :: CFGNode }
+  PP { dependent :: Set ID, node :: CFGData }
      deriving (Show)
 
-cfgToProgP :: CFG CFGNode -> [ProgPoint]
+cfgToProgP :: CFG CFGData -> [ProgPoint]
 cfgToProgP (CFG {nodes, edges, src, sink}) =
   map nodeToProgP (M.elems nodes) where
     nodeToProgP node@(Node i inner) =
@@ -230,14 +237,21 @@ type Equation = [Lattice] -> Lattice
 
 progPsToEqs :: [ProgPoint] -> [Equation]
 progPsToEqs points = map pointToEq points where
+  singleDepOrEmpty deps
+    | S.null deps        = const S.empty
+    | S.size deps == 1 = (!! S.elemAt 0 deps)
+    | otherwise          = error "Only call this function on singleton  or empty sets :("
   leastUpperBound :: [Lattice] -> Set ID -> Lattice
   leastUpperBound prev deps
     | S.null deps = S.empty
     | otherwise = foldl1 S.intersection . map (\d -> prev !! d) . S.toList $ deps
   pointToEq (PP { dependent, node }) prev =
     case node of
-      Cond expr     -> avail expr $ leastUpperBound prev dependent
-      CFGStmt stmt  -> stmtToTFun stmt $ leastUpperBound prev dependent
+      -- Conditionals and Stmts only have one incoming edge!
+      Cond expr     -> avail expr $ singleDepOrEmpty dependent prev
+      CFGStmt stmt  -> stmtToTFun stmt $ singleDepOrEmpty dependent prev
+      -- Confluence points have more (actually only 2)
+      ConfPoint     -> leastUpperBound prev dependent
 
 type BigT = [Lattice] -> [Lattice]
 
