@@ -16,9 +16,17 @@ build-type:          Simple
 cabal-version:       >=1.10
 
 library
-  exposed-modules:     Avail, Data.Graph
+  exposed-modules:     Avail, Data.Graph, Data.Cmm.Parser, Data.Cmm.AST
+                     , Text.Pretty
   -- other-modules:
   -- other-extensions:
-  build-depends:       base >=4.7 && <4.8, mtl, containers
+  build-depends:       base >=4.7 && <4.8, mtl, containers, parsec
   hs-source-dirs:      src
   default-language:    Haskell2010
+
+test-suite spec
+  type: exitcode-stdio-1.0
+  ghc-options: -Wall
+  hs-source-dirs: test
+  main-is: Spec.hs
+  build-depends: base  == 4.*, hspec == 2.*, neat-interpolation, asa-analysis

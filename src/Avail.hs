@@ -11,56 +11,7 @@ import Control.Monad.State
 import Data.Functor ((<$>))
 import Data.List (sort)
 import Data.Graph
-
-import Debug.Trace
-
-data Expr
-  = Add Expr Expr
-  | Sub Expr Expr
-  | Mul Expr Expr
-  | Gt  Expr Expr
-  | Const Int
-  | Var String
-  | Input
-  deriving (Eq, Ord)
-
-ppExpr expr = case expr of
-  Add e1 e2 -> ppExpr e1 ++ " + " ++ ppExpr e2
-  Sub e1 e2 -> ppExpr e1 ++ " - " ++ ppExpr e2
-  Mul e1 e2 -> ppExpr e1 ++ " * " ++ ppExpr e2
-  Gt  e1 e2 -> ppExpr e1 ++ " > " ++ ppExpr e2
-  Const x   -> show x
-  Var n     -> n
-  Input     -> "input"
-
-instance Show Expr where
-  show = ppExpr
-
-data Stmt
-  = Skip
-  | Ass String Expr
-  | ITE Expr Stmt Stmt
-  | Comp Stmt Stmt
-  | While Expr Stmt
-  deriving (Eq, Ord)
-
-ppStmt n stmt = case stmt of
-  Skip -> "skip;"
-  Ass v e -> v ++ " := " ++ ppExpr e ++ ";"
-  ITE e s1 s2 -> "if " ++ ppExpr e ++ " then " ++ ppStmt n s1 ++ " else " ++ ppStmt n s2
-  Comp s1 s2 -> let ident = replicate n '\t' in ppStmt n s1 ++ "\n" ++ ident ++ ppStmt n s2
-  While e s  -> let ident = replicate (n+1) '\t'
-                in  "while (" ++ ppExpr e ++ ") do (\n" ++ ident ++ ppStmt (n+1) s ++ "\n)"
-
-instance Show Stmt where
-  show = ppStmt 0
-
--- Composition to list of statements
-comp2list :: Stmt -> [Stmt]
-comp2list (Comp s1 c2@(Comp s2 s3)) = s1 : comp2list c2
-comp2list (Comp c1@(Comp s1 s2) s3) = comp2list c1 ++ [s3]
-comp2list (Comp s1 s2) = [s1,s2]
-comp2list _ = error "only flatten compositions"
+import Data.Cmm.AST
 
 type Lattice = Set Expr
 type TFun = Lattice -> Lattice
@@ -78,21 +29,31 @@ exprs expr = case expr of
   e@(Sub e1 e2) -> S.singleton e `union` exprs e1 `union` exprs e2
   e@(Mul e1 e2) -> S.singleton e `union` exprs e1 `union` exprs e2
   e@(Gt  e1 e2) -> S.singleton e `union` exprs e1 `union` exprs e2
-  Const _     -> S.empty
+  e@(Lt  e1 e2) -> S.singleton e `union` exprs e1 `union` exprs e2
+  e@(Eq  e1 e2) -> S.singleton e `union` exprs e1 `union` exprs e2
+  IConst _    -> S.empty
+  BConst _    -> S.empty
   Var   _     -> S.empty
   Input       -> S.empty
 
+avail :: Expr -> Lattice -> Lattice
 avail e l    = l `union` exprs e
+
+unavail :: String -> Lattice -> Lattice
 unavail v l  = l \\ S.filter (occursIn v) l where
   occursIn v e = case e of
     Add e1 e2 -> occursIn v e1 || occursIn v e2
     Sub e1 e2 -> occursIn v e1 || occursIn v e2
     Mul e1 e2 -> occursIn v e1 || occursIn v e2
     Gt  e1 e2 -> occursIn v e1 || occursIn v e2
-    Const _   -> False
+    Lt  e1 e2 -> occursIn v e1 || occursIn v e2
+    Eq  e1 e2 -> occursIn v e1 || occursIn v e2
+    IConst _  -> False
+    BConst _  -> False
     Var s     -> s == v
     Input     -> False
 
+assign :: String -> Expr -> Lattice -> Lattice
 assign v e  = avail e . unavail v
 
 stmtToTFun :: Stmt -> TFun
@@ -102,9 +63,6 @@ stmtToTFun stmt = case stmt of
   ITE e s s' -> avail e
   Comp s s' -> id
   While e s -> avail e
-
-
-
 
 -- control flow graph
 data CFGNodeData
@@ -141,27 +99,29 @@ cfgGvzer =
 vizCfg g name = toGraphviz g name cfgGvzer
 writeVizCfg g name = writeFile ("./graphviz/" ++ name ++ ".dot") (vizCfg g name)
 
+
 prog1 :: Stmt
 prog1 =
   Ass "x" (Var "a" `Mul` Var "b") `Comp`
-  (ITE ((Var "a" `Mul` Var "b") `Gt` (Const 20 `Mul` Var "c"))
-       (Ass "y" (Const 20 `Add` Var "a"))
-       (Ass "y" (Const 30 `Add` Var "c"))
+  (ITE ((Var "a" `Mul` Var "b") `Gt` (IConst 20 `Mul` Var "c"))
+       (Ass "y" (IConst 20 `Add` Var "a"))
+       (Ass "y" (IConst 30 `Add` Var "c"))
   ) `Comp`
-  Ass "z" (Const 20 `Mul` Const 30) `Comp`
-  Ass "a" (Const 20) `Comp`
+  Ass "z" (IConst 20 `Mul` IConst 30) `Comp`
+  Ass "a" (IConst 20) `Comp`
   Ass "u" (Var "a" `Mul` Var "b")
 
 prog2 :: Stmt
 prog2 =
   Ass "x" (Var "a" `Mul` Var "b") `Comp` (
-  ((While ((Const 20 `Mul` Var "c") `Gt` (Var "a" `Mul` Var "b"))
-       ((Ass "a" (Const 20 `Add` Var "a")) `Comp`
-       (Ass "c" (Var "c" `Sub` Const 1)))
+  ((While ((IConst 20 `Mul` Var "c") `Gt` (Var "a" `Mul` Var "b"))
+       ((Ass "a" (IConst 20 `Add` Var "a")) `Comp`
+       (Ass "c" (Var "c" `Sub` IConst 1)))
   ) `Comp` (
-  Ass "z" (Const 20 `Mul` Const 30) `Comp`
-  Ass "a" (Const 20) `Comp`
+  Ass "z" (IConst 20 `Mul` IConst 30) `Comp`
+  Ass "a" (IConst 20) `Comp`
   Ass "u" (Var "a" `Mul` Var "b"))))
+
 
 cfg1 :: Graph CFGNodeData CFGEdgeData
 cfg1 = Graph {
@@ -171,12 +131,12 @@ cfg1 = Graph {
   } where
       nodes = M.fromList $ zipWith (\i a -> (i, Node i a)) [0..]
                 [ CFGStmt $ Ass "x" (Var "a" `Mul` Var "b")   -- x := a * b  (0)
-                , Cond ((Var "a" `Mul` Var "b") `Gt` (Const 20 `Mul` Var "c")) -- if (a * b > 20 * c) (1)
-                , CFGStmt $ Ass "y" (Const 20 `Add` Var "a")  -- y := 20 + a (2)
-                , CFGStmt $ Ass "y" (Const 30 `Add` Var "c")  -- y := 30 + c (3)
+                , Cond ((Var "a" `Mul` Var "b") `Gt` (IConst 20 `Mul` Var "c")) -- if (a * b > 20 * c) (1)
+                , CFGStmt $ Ass "y" (IConst 20 `Add` Var "a")  -- y := 20 + a (2)
+                , CFGStmt $ Ass "y" (IConst 30 `Add` Var "c")  -- y := 30 + c (3)
                 , ConfPoint
-                , CFGStmt $ Ass "z" (Const 20 `Mul` Const 30) -- z := 20 * 30 (4)
-                , CFGStmt $ Ass "a" (Const 20)                -- a := 20 (5)
+                , CFGStmt $ Ass "z" (IConst 20 `Mul` IConst 30) -- z := 20 * 30 (4)
+                , CFGStmt $ Ass "a" (IConst 20)                -- a := 20 (5)
                 , CFGStmt $ Ass "u" (Var "a" `Mul` Var "b")   -- u := a * b (6)
                 ]
       no = NoData
