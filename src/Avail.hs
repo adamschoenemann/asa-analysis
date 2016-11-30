@@ -1,6 +1,7 @@
 {-# LANGUAGE NamedFieldPuns, FlexibleInstances #-}
 
-module Avail where
+module Avail
+  ( module Avail, module Anal ) where
 
 import Control.Monad.Fix
 import Data.Set (Set, union, (\\))
@@ -15,58 +16,7 @@ import Data.Cmm.AST
 import Anal.CFG
 import Text.Pretty
 import Data.List (intercalate)
-
-type Lattice = Set Expr
-type TFun = Lattice -> Lattice
-
--- First go at generalizing lattice elements
-class (Ord a, Eq a) => Lat a where
-  leastUpperBound :: Lat a => a -> a -> a
-
-instance Lat (Set Expr) where
-  leastUpperBound = S.intersection
-
-exprs :: Expr -> Lattice
-exprs expr = case expr of
-  e@(Add e1 e2) -> S.singleton e `union` exprs e1 `union` exprs e2
-  e@(Sub e1 e2) -> S.singleton e `union` exprs e1 `union` exprs e2
-  e@(Mul e1 e2) -> S.singleton e `union` exprs e1 `union` exprs e2
-  e@(Gt  e1 e2) -> S.singleton e `union` exprs e1 `union` exprs e2
-  e@(Lt  e1 e2) -> S.singleton e `union` exprs e1 `union` exprs e2
-  e@(Eq  e1 e2) -> S.singleton e `union` exprs e1 `union` exprs e2
-  ILit _    -> S.empty
-  BLit _    -> S.empty
-  Var   _     -> S.empty
-  Input       -> S.empty
-
-avail :: Expr -> Lattice -> Lattice
-avail e l    = l `union` exprs e
-
-unavail :: String -> Lattice -> Lattice
-unavail v l  = l \\ S.filter (occursIn v) l where
-  occursIn v e = case e of
-    Add e1 e2 -> occursIn v e1 || occursIn v e2
-    Sub e1 e2 -> occursIn v e1 || occursIn v e2
-    Mul e1 e2 -> occursIn v e1 || occursIn v e2
-    Gt  e1 e2 -> occursIn v e1 || occursIn v e2
-    Lt  e1 e2 -> occursIn v e1 || occursIn v e2
-    Eq  e1 e2 -> occursIn v e1 || occursIn v e2
-    ILit _  -> False
-    BLit _  -> False
-    Var s     -> s == v
-    Input     -> False
-
-assign :: String -> Expr -> Lattice -> Lattice
-assign v e  = avail e . unavail v
-
-stmtToTFun :: Stmt -> TFun
-stmtToTFun stmt = case stmt of
-  Skip -> id
-  Ass v e -> assign v e
-  ITE e s s' -> avail e
-  Block _ -> id
-  While e s -> avail e
-  Output e  -> avail e
+import Anal
 
 
 prog1 :: [Stmt]
@@ -120,67 +70,3 @@ cfg2 :: Graph CFGNodeData CFGEdgeData
 cfg2 = cfg prog2
 
 
-data ProgPoint =
-  PP { dependent :: Set ID, node :: Node CFGNodeData }
-     deriving (Show)
-
-cfgToProgP :: Graph CFGNodeData CFGEdgeData -> [ProgPoint]
-cfgToProgP (Graph {nodes, edges, src, sink}) =
-  map nodeToProgP (M.elems nodes) where
-    nodeToProgP node@(Node i inner) =
-      let dependent = incoming i
-      in  PP { dependent = dependent, node = node }
-    incoming i = S.map fst . S.filter ((i == ) . snd) $ S.map endpoints edges
-
-
-type Equation = [Lattice] -> Lattice
-
-progPsToEqs :: [ProgPoint] -> [Equation]
-progPsToEqs points = map pointToEq points where
-  singleDepOrEmpty deps
-    | S.null deps        = const S.empty
-    | S.size deps == 1 = (!! S.elemAt 0 deps)
-    | otherwise          = error "Only call this function on singleton  or empty sets :("
-  leastUpperBound :: [Lattice] -> Set ID -> Lattice
-  leastUpperBound prev deps
-    | S.null deps = S.empty
-    | otherwise = foldl1 S.intersection . map (\d -> prev !! d) . S.toList $ deps
-  pointToEq (PP { dependent, node }) prev =
-    let Node i nd = node
-    in  case nd of
-          -- Conditionals and Stmts only have one incoming edge!
-          Cond expr     -> avail expr $ singleDepOrEmpty dependent prev
-          CFGStmt stmt  -> stmtToTFun stmt $ singleDepOrEmpty dependent prev
-          -- Confluence points have more (actually only 2)
-          ConfPoint     -> leastUpperBound prev dependent
-
-type BigT = [Lattice] -> [Lattice]
-
-eqsToBigT :: [Equation] -> BigT
-eqsToBigT eqs l = map ($ l) eqs
-
-solveFix :: [Lattice] -> BigT -> [Lattice]
-solveFix l bigT =
-  let l' = bigT l
-  in  if (l == l') then l else solveFix l' bigT
-
-collectExprs :: [Stmt] -> Set Expr
-collectExprs stmts = foldl union S.empty $ map collectExprs' stmts where
-  collectExprs' stmt = case stmt of
-    Skip -> S.empty
-    Ass _ e -> exprs e
-    ITE e t f -> exprs e `union` collectExprs' t `union` collectExprs' f
-    Block stmts -> collectExprs stmts --collectExprs' s1 `union` collectExprs' s2
-    While e s -> exprs e `union` collectExprs' s
-    Output e  -> exprs e
-
-
-analyzeProg :: [Stmt] -> [(ID, Lattice)]
-analyzeProg prog = zip (map (getID . node) progps) $ solveFix initial bigT where
-  allExprs = collectExprs prog
-  progps = cfgToProgP $ cfg prog
-  bigT = eqsToBigT . progPsToEqs $ progps
-  initial = replicate (length progps) allExprs
-
-printAnalysis :: [Stmt] -> IO ()
-printAnalysis = mapM_ (\(i, r) -> putStrLn $ (show i ++ ": " ++ (intercalate ",   " . map ppr . S.toList $ r))) . analyzeProg
