@@ -42,7 +42,7 @@ data Stmt
   = Skip
   | Ass String Expr
   | ITE Expr Stmt Stmt
-  | Comp Stmt Stmt
+  | Block [Stmt]
   | While Expr Stmt
   | Output Expr
   deriving (Eq, Ord, Show)
@@ -53,33 +53,35 @@ ppStmt n stmt =
   in case stmt of
     Skip -> indent n ++ "skip;"
     Ass v e -> indent n ++ v ++ " := " ++ ppExpr e ++ ";"
-    ITE e s1 s2 ->    indent n ++ "if " ++ ppExpr e ++ " then" ++ wsComp s1
-                   ++ ppStmt (n+1) s1 ++ "\n" ++ indent n ++ "else" ++ wsComp s2
-                   ++ ppStmt (n+1) s2
-    c@(Comp s1 s2) -> "{\n" ++ ppStmts n (comp2list c) ++ indent (n-1) ++ "}" -- ppStmt n s1 ++ "\n" ++ ppStmt n s2
+    ITE e s1 s2 ->    indent n ++ "if " ++ ppExpr e ++ " then" ++ wsBlock s1
+                   ++ (trimBlock s1 $ ppStmt (incBlock s1 n) s1) ++ "\n" ++ indent n ++ "else" ++ wsBlock s2
+                   ++ (trimBlock s2 $ ppStmt (incBlock s2 n) s2)
+    Block stmts -> indent n ++ "{\n" ++ unlines (map (ppStmt (n+1)) stmts) ++ indent n ++ "}"
     While e s  ->    indent n ++ "while " ++ ppExpr e ++ " do "
-                  ++ ppStmt (n+1) s
+                  ++ (trimBlock s $ ppStmt (incBlock s n) s)
     Output e   -> indent n ++ "output " ++ ppExpr e ++ ";"
   where
     -- whitespace composition
-    wsComp (Comp _ _) = " "
-    wsComp _          = "\n"
+    wsBlock (Block _) = " "
+    wsBlock _          = "\n"
+    incBlock (Block _) j = j
+    incBlock _         j = j + 1
+    trimBlock (Block _) = trimHead
+    trimBlock _         = id
 
 instance Pretty Stmt where
   ppr = ppStmt 0
 
 ppStmts :: Int -> [Stmt] -> String
-ppStmts n = unlines . map (helper n) where
-  helper n c@(Comp _ _) = ppStmt (n+1) c
-  helper n s = ppStmt n s
+ppStmts n = unlines . map (ppStmt n)
 
 instance Pretty [Stmt] where
   ppr = ppStmts 0
 
 -- Composition to list of statements
-comp2list :: Stmt -> [Stmt]
-comp2list (Comp s1 c2@(Comp s2 s3)) = s1 : comp2list c2
-comp2list (Comp s1 s2)             = [s1,s2]
+-- comp2list :: Stmt -> [Stmt]
+-- comp2list (Comp s1 c2@(Comp s2 s3)) = s1 : comp2list c2
+-- comp2list (Comp s1 s2)             = [s1,s2]
 -- comp2list (Comp s1 c2@(Comp s2 s3)) = s1 : comp2list c2
 -- comp2list (Comp c1@(Comp s1 s2) s3) = comp2list c1 ++ [s3]
 -- comp2list (Comp s1 s2) = [s1,s2]

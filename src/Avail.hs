@@ -62,7 +62,7 @@ stmtToTFun stmt = case stmt of
   Skip -> id
   Ass v e -> assign v e
   ITE e s s' -> avail e
-  Comp s s' -> id
+  Block _ -> id
   While e s -> avail e
   Output e  -> avail e
 
@@ -83,8 +83,9 @@ prog2 :: [Stmt]
 prog2 =
   [ Ass "x" (Var "a" `Mul` Var "b")
   , While ((ILit 20 `Mul` Var "c") `Gt` (Var "a" `Mul` Var "b"))
-       ((Ass "a" (ILit 20 `Add` Var "a")) `Comp`
-        (Ass "c" (Var "c" `Sub` ILit 1)))
+       (Block [ (Ass "a" (ILit 20 `Add` Var "a"))
+              , (Ass "c" (Var "c" `Sub` ILit 1))
+              ])
   , Ass "z" (ILit 20 `Mul` ILit 30)
   , Ass "a" (ILit 20)
   , Ass "u" (Var "a" `Mul` Var "b")
@@ -166,7 +167,7 @@ collectExprs stmts = foldl union S.empty $ map collectExprs' stmts where
     Skip -> S.empty
     Ass _ e -> exprs e
     ITE e t f -> exprs e `union` collectExprs' t `union` collectExprs' f
-    Comp s1 s2 -> collectExprs' s1 `union` collectExprs' s2
+    Block stmts -> collectExprs stmts --collectExprs' s1 `union` collectExprs' s2
     While e s -> exprs e `union` collectExprs' s
     Output e  -> exprs e
 

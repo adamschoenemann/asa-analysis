@@ -26,9 +26,9 @@ stmt =  (const Skip) <$> string "skip" <* spaces <* char ';' <* spaces
                      (string "do" *> spaces1 *> stmt) <* spaces
     <|> Output <$> (string "output" *> spaces1 *> expr <* char ';') <* spaces
     <|> Ass <$> (ident <* spaces) <*> (string ":=" *> spaces *> expr <* char ';') <* spaces
-    <|> (brackets comp) <* spaces
+    <|> Block <$> (brackets block) <* spaces
       where
-        comp = stmt `chainr1` (const Comp <$> spaces)
+        block = sepBy stmt spaces
 
 spaces1 :: Parser String
 spaces1 = many1 space

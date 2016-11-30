@@ -4,7 +4,7 @@ module TestPrograms where
 
 import NeatInterpolation
 
-in1, in2, in3, in4 :: String
+in1, in2, in3, in4, in5 :: String
 
 in1 =
   [string|
@@ -34,8 +34,10 @@ in3 =
     if x then
       if false then
         y := true;
-      else
+      else {
         y := false;
+        z := 42 * 42;
+      }
     else
       y := 100 - (10 * 10);|]
 
@@ -50,6 +52,21 @@ in4 =
     else
       y := 100 - (10 * 10);|]
 
+in5 =
+  [string|
+    skip;
+    {
+      skip;
+      skip;
+      x := 2 * 20;
+      {
+        skip;
+        output 10;
+      }
+    }
+    skip;
+    output 2;
+  |]
 
 testPrograms :: [(String, String)]
-testPrograms = [("in1", in1), ("in2", in2), ("in3", in3), ("in4", in4)]
+testPrograms = [("in1", in1), ("in2", in2), ("in3", in3), ("in4", in4), ("in5", in5)]

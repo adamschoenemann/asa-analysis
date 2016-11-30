@@ -54,8 +54,7 @@ cfg ss =
       fromNodes nodes = M.fromList $ map (\(Node i n) -> (i, Node i n)) nodes
 
 computeGraph :: [Stmt] -> CFGState ID
-computeGraph stmts = computeStmt (progToComp stmts) where
-  progToComp ss = foldl1 Comp ss
+computeGraph stmts = computeStmt (Block stmts)
 
 fst' :: (a,b,c) -> a
 fst' (a,_,_) = a
@@ -76,26 +75,6 @@ newNode n = do
   put (i+1,n':ns,es)
   return $ i
 
--- type CFGState' a = State ([Node CFGNodeData], Edges) a
--- -- computeStmt' returns the ID of the root of the graph
--- computeStmt' :: ID -> Stmt -> CFGState' ID
--- computeStmt' i stmt =
---   case stmt of
---     Skip -> mkNode i (CFGStmt Skip)
---     Ass v e -> mkNode i (CFGStmt $ Ass v e)
---     -- s1 is never a compound stmt
---     Comp s1 s2 -> do
---       j <- computeStmt' i s1
---       k <- computeStmt' s2
---   where
---     mkNode :: ID -> CFGNodeData -> CFGState' ID
---     mkNode i nd = do
---       (nodes, edges) <- get
---       let node = Node i nd
---       put (node : nodes, edges)
---       return i
-
-
 
 -- Return value is ID of last created node
 -- The state contains the ID of the *next* node!
@@ -114,14 +93,18 @@ computeStmt s' =
       newEdge' trid confid
       newEdge' flid confid
       return confid
-    Comp s1 s2 -> do
-      u <- computeStmt s1
-      let ed = case s1 of
-                    While _ _ -> Branch False
-                    _         -> NoData
-      v <- fst' <$> get
-      newEdge u v ed
-      computeStmt s2
+    Block [] -> fst' <$> get
+    Block ss -> computeBlock ss where
+        computeBlock [] = fst' <$> get
+        computeBlock [s1] = computeStmt s1
+        computeBlock (s1:stmts) = do
+            u <- computeStmt s1
+            let ed = case s1 of
+                          While _ _ -> Branch False
+                          _         -> NoData
+            v <- fst' <$> get
+            newEdge u v ed
+            computeBlock stmts
     While e s -> do
       confid <- newNode ConfPoint -- confluence id
       condid <- newNode (Cond e)  -- conditional id
