@@ -3,7 +3,10 @@
   TBH, we should use a Lexer first, instead of lexing and parsing in one step
   but it works for now
 -}
-module Data.Cmm.Parser where
+module Data.Cmm.Parser
+  ( module Data.Cmm.Parser
+  , parse
+  ) where
 
 import Text.ParserCombinators.Parsec
 import Data.Cmm.AST
@@ -25,7 +28,7 @@ stmt =  (const Skip) <$> string "skip" <* spaces <* char ';' <* spaces
     <|> Ass <$> (ident <* spaces) <*> (string ":=" *> spaces *> expr <* char ';') <* spaces
     <|> (brackets comp) <* spaces
       where
-        comp = stmt `chainl1` (const Comp <$> spaces)
+        comp = stmt `chainr1` (const Comp <$> spaces)
 
 spaces1 :: Parser String
 spaces1 = many1 space
