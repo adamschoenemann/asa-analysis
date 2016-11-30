@@ -1,4 +1,4 @@
-{-# LANGUAGE NamedFieldPuns, FlexibleInstances #-}
+{-# LANGUAGE NamedFieldPuns, FlexibleInstances, GADTs, StandaloneDeriving #-}
 
 module Anal where
 
@@ -11,11 +11,13 @@ import Data.Graph
 import Data.Cmm.AST
 import Anal.CFG
 import Text.Pretty
-import Data.List (intercalate)
 
-type Lattice = Set Expr
+class (Ord a, Eq a) => Lat a where
+  bottom :: a
+
+
 -- Transfer Function
-type TFun = Lattice -> Lattice
+type TFun a = a -> a
 
 data ProgPoint =
   PP { dependent :: Set ID, node :: Node CFGNodeData }
@@ -29,23 +31,24 @@ cfgToProgP (Graph {nodes, edges, src, sink}) =
       in  PP { dependent = dependent, node = node }
     incoming i = S.map fst . S.filter ((i == ) . snd) $ S.map endpoints edges
 
+-- a function from dependencies to a single lattice element
+type Equation a = [a] -> a
 
-type Equation = [Lattice] -> Lattice
 
-data Analysis =
-  Analysis { stmtToTFun :: Stmt -> TFun
-           , exprToTFun :: Expr -> TFun
-           , leastUpperBound :: [Lattice] -> Lattice
-           , initialLattice :: [Stmt] -> Lattice
-           }
+data Analysis a where
+  Analysis :: Lat a => { stmtToTFun :: Stmt -> TFun a
+                       , exprToTFun :: Expr -> TFun a
+                       , leastUpperBound :: [a] -> a
+                       , initialLattice :: [Stmt] -> a
+                       } -> Analysis a
 
-progPsToEqs :: Analysis -> [ProgPoint] -> [Equation]
+progPsToEqs :: Lat a => Analysis a -> [ProgPoint] -> [Equation a]
 progPsToEqs anal points = map pointToEq points where
   singleDepOrEmpty deps
-    | S.null deps        = const S.empty
-    | S.size deps == 1 = (!! S.elemAt 0 deps)
+    | S.null deps        = const bottom
+    | S.size deps == 1 = let h = S.elemAt 0 deps in (!! h)
     | otherwise          = error "Only call this function on singleton  or empty sets :("
-  findDeps :: [Lattice] -> Set ID -> [Lattice]
+  findDeps :: [a] -> Set ID -> [a]
   findDeps prev deps
     | S.null deps = []
     | otherwise = map (\d -> prev !! d) . S.toList $ deps
@@ -58,32 +61,29 @@ progPsToEqs anal points = map pointToEq points where
           -- Confluence points have more (actually only 2)
           ConfPoint     -> (leastUpperBound anal) (findDeps prev dependent)
 
-type BigT = [Lattice] -> [Lattice]
+type BigT a = [a] -> [a]
 
-eqsToBigT :: [Equation] -> BigT
+eqsToBigT :: Lat a => [Equation a] -> BigT a
 eqsToBigT eqs l = map ($ l) eqs
 
-solveFix :: [Lattice] -> BigT -> [Lattice]
+solveFix :: Lat a => [a] -> BigT a -> [a]
 solveFix l bigT =
   let l' = bigT l
   in  if (l == l') then l else solveFix l' bigT
 
 
-analyzeProg :: Analysis -> [Stmt] -> [(ID, Lattice)]
+analyzeProg :: Lat a => Analysis a -> [Stmt] -> [(ID, a)]
 analyzeProg anal prog = zip (map (getID . node) progps) $ solveFix initial bigT where
-  allExprs = (initialLattice anal) prog
+  initialL = (initialLattice anal) prog
   progps = cfgToProgP $ cfg prog
   bigT = eqsToBigT . progPsToEqs anal $ progps
-  initial = replicate (length progps) allExprs
+  initial = replicate (length progps) initialL
 
-pprintAnalysis :: Analysis -> [Stmt] -> IO ()
-pprintAnalysis anal = mapM_ (\(i, r) -> putStrLn $
-                        (show i ++ ": " ++
-                          (intercalate ",   " . map ppr . S.toList $ r))) .
+pprintAnalysis :: (Lat a, Pretty a) => Analysis a -> [Stmt] -> IO ()
+pprintAnalysis anal = mapM_ (\(i, r) -> putStrLn $ (show i ++ ": " ++ ppr r)) .
                         analyzeProg anal
 
-printAnalysis :: Analysis -> [Stmt] -> IO ()
-printAnalysis anal = mapM_ (\(i, r) -> putStrLn $
-                        (show i ++ ": " ++
-                          (intercalate ",   " . map show . S.toList $ r))) .
+printAnalysis :: (Lat a, Show a) => Analysis a -> [Stmt] -> IO ()
+printAnalysis anal = mapM_ (\(i, r) -> putStrLn $ (show i ++ ": " ++ show r)) .
                         analyzeProg anal
+

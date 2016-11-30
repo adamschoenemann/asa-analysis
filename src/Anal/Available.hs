@@ -7,8 +7,13 @@ import Data.Set (Set, union, (\\))
 import qualified Data.Set as S
 import Anal
 import Data.Cmm.AST
+import Text.Pretty
+import Data.List (intercalate)
 
-exprs :: Expr -> Lattice
+instance Pretty (Set Expr) where
+  ppr = intercalate ", " . map ppr . S.toList
+
+exprs :: Expr -> Set Expr
 exprs expr = case expr of
   e@(Add e1 e2) -> S.singleton e `union` exprs e1 `union` exprs e2
   e@(Sub e1 e2) -> S.singleton e `union` exprs e1 `union` exprs e2
@@ -21,10 +26,10 @@ exprs expr = case expr of
   Var   _     -> S.empty
   Input       -> S.empty
 
-avail :: Expr -> Lattice -> Lattice
+avail :: Expr -> Set Expr -> Set Expr
 avail e l    = l `union` exprs e
 
-unavail :: String -> Lattice -> Lattice
+unavail :: String -> Set Expr -> Set Expr
 unavail var l  = l \\ S.filter (occursIn var) l where
   occursIn v e = case e of
     Add e1 e2 -> occursIn v e1 || occursIn v e2
@@ -38,10 +43,10 @@ unavail var l  = l \\ S.filter (occursIn var) l where
     Var s     -> s == v
     Input     -> False
 
-assign :: String -> Expr -> Lattice -> Lattice
+assign :: String -> Expr -> Set Expr -> Set Expr
 assign v e  = avail e . unavail v
 
-availStmtToTFun :: Stmt -> TFun
+availStmtToTFun :: Stmt -> TFun (Set Expr)
 availStmtToTFun stmt = case stmt of
   Skip -> id
   Ass v e -> assign v e
@@ -60,10 +65,13 @@ collectExprs stmts = foldl union S.empty $ map collectExprs' stmts where
     While e s -> exprs e `union` collectExprs' s
     Output e  -> exprs e
 
-available :: Analysis
+instance Lat (Set Expr) where
+  bottom = S.empty
+
+available :: Analysis (Set Expr)
 available =
   Analysis { stmtToTFun = availStmtToTFun -- :: Stmt -> TFun
            , exprToTFun = avail -- :: Expr -> TFun
-           , leastUpperBound = foldl1 S.intersection -- :: [Lattice] -> Lattice
-           , initialLattice = collectExprs -- :: [Stmt] -> Lattice
+           , leastUpperBound = foldl1 S.intersection -- :: [Set Expr] -> Set Expr
+           , initialLattice = collectExprs -- :: [Stmt] -> Set Expr
            }
