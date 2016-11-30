@@ -31,8 +31,8 @@ exprs expr = case expr of
   e@(Gt  e1 e2) -> S.singleton e `union` exprs e1 `union` exprs e2
   e@(Lt  e1 e2) -> S.singleton e `union` exprs e1 `union` exprs e2
   e@(Eq  e1 e2) -> S.singleton e `union` exprs e1 `union` exprs e2
-  IConst _    -> S.empty
-  BConst _    -> S.empty
+  ILit _    -> S.empty
+  BLit _    -> S.empty
   Var   _     -> S.empty
   Input       -> S.empty
 
@@ -48,8 +48,8 @@ unavail v l  = l \\ S.filter (occursIn v) l where
     Gt  e1 e2 -> occursIn v e1 || occursIn v e2
     Lt  e1 e2 -> occursIn v e1 || occursIn v e2
     Eq  e1 e2 -> occursIn v e1 || occursIn v e2
-    IConst _  -> False
-    BConst _  -> False
+    ILit _  -> False
+    BLit _  -> False
     Var s     -> s == v
     Input     -> False
 
@@ -63,6 +63,7 @@ stmtToTFun stmt = case stmt of
   ITE e s s' -> avail e
   Comp s s' -> id
   While e s -> avail e
+  Output e  -> avail e
 
 -- control flow graph
 data CFGNodeData
@@ -100,27 +101,28 @@ vizCfg g name = toGraphviz g name cfgGvzer
 writeVizCfg g name = writeFile ("./graphviz/" ++ name ++ ".dot") (vizCfg g name)
 
 
-prog1 :: Stmt
+prog1 :: [Stmt]
 prog1 =
-  Ass "x" (Var "a" `Mul` Var "b") `Comp`
-  (ITE ((Var "a" `Mul` Var "b") `Gt` (IConst 20 `Mul` Var "c"))
-       (Ass "y" (IConst 20 `Add` Var "a"))
-       (Ass "y" (IConst 30 `Add` Var "c"))
-  ) `Comp`
-  Ass "z" (IConst 20 `Mul` IConst 30) `Comp`
-  Ass "a" (IConst 20) `Comp`
-  Ass "u" (Var "a" `Mul` Var "b")
+  [ Ass "x" (Var "a" `Mul` Var "b")
+  , (ITE ((Var "a" `Mul` Var "b") `Gt` (ILit 20 `Mul` Var "c"))
+       (Ass "y" (ILit 20 `Add` Var "a"))
+       (Ass "y" (ILit 30 `Add` Var "c"))
+  )
+  , Ass "z" (ILit 20 `Mul` ILit 30)
+  , Ass "a" (ILit 20)
+  , Ass "u" (Var "a" `Mul` Var "b")
+  ]
 
-prog2 :: Stmt
+prog2 :: [Stmt]
 prog2 =
-  Ass "x" (Var "a" `Mul` Var "b") `Comp` (
-  ((While ((IConst 20 `Mul` Var "c") `Gt` (Var "a" `Mul` Var "b"))
-       ((Ass "a" (IConst 20 `Add` Var "a")) `Comp`
-       (Ass "c" (Var "c" `Sub` IConst 1)))
-  ) `Comp` (
-  Ass "z" (IConst 20 `Mul` IConst 30) `Comp`
-  Ass "a" (IConst 20) `Comp`
-  Ass "u" (Var "a" `Mul` Var "b"))))
+  [ Ass "x" (Var "a" `Mul` Var "b")
+  , While ((ILit 20 `Mul` Var "c") `Gt` (Var "a" `Mul` Var "b"))
+       ((Ass "a" (ILit 20 `Add` Var "a")) `Comp`
+        (Ass "c" (Var "c" `Sub` ILit 1)))
+  , Ass "z" (ILit 20 `Mul` ILit 30)
+  , Ass "a" (ILit 20)
+  , Ass "u" (Var "a" `Mul` Var "b")
+  ]
 
 
 cfg1 :: Graph CFGNodeData CFGEdgeData
@@ -131,12 +133,12 @@ cfg1 = Graph {
   } where
       nodes = M.fromList $ zipWith (\i a -> (i, Node i a)) [0..]
                 [ CFGStmt $ Ass "x" (Var "a" `Mul` Var "b")   -- x := a * b  (0)
-                , Cond ((Var "a" `Mul` Var "b") `Gt` (IConst 20 `Mul` Var "c")) -- if (a * b > 20 * c) (1)
-                , CFGStmt $ Ass "y" (IConst 20 `Add` Var "a")  -- y := 20 + a (2)
-                , CFGStmt $ Ass "y" (IConst 30 `Add` Var "c")  -- y := 30 + c (3)
+                , Cond ((Var "a" `Mul` Var "b") `Gt` (ILit 20 `Mul` Var "c")) -- if (a * b > 20 * c) (1)
+                , CFGStmt $ Ass "y" (ILit 20 `Add` Var "a")  -- y := 20 + a (2)
+                , CFGStmt $ Ass "y" (ILit 30 `Add` Var "c")  -- y := 30 + c (3)
                 , ConfPoint
-                , CFGStmt $ Ass "z" (IConst 20 `Mul` IConst 30) -- z := 20 * 30 (4)
-                , CFGStmt $ Ass "a" (IConst 20)                -- a := 20 (5)
+                , CFGStmt $ Ass "z" (ILit 20 `Mul` ILit 30) -- z := 20 * 30 (4)
+                , CFGStmt $ Ass "a" (ILit 20)                -- a := 20 (5)
                 , CFGStmt $ Ass "u" (Var "a" `Mul` Var "b")   -- u := a * b (6)
                 ]
       no = NoData
@@ -153,24 +155,50 @@ type CPoints  n  = Map ID (Node n)
 type NextID = ID
 type CFGState a = State (NextID, [Node CFGNodeData], Edges) a
 
-cfg :: Stmt -> Graph CFGNodeData CFGEdgeData
-cfg s =
-  let (sink,(_, ns, es)) = runState (computeGraph s) (0, [], [])
+cfg :: [Stmt] -> Graph CFGNodeData CFGEdgeData
+cfg ss =
+  let (sink,(_, ns, es)) = runState (computeGraph ss) (0, [], [])
   in  Graph { nodes = fromNodes ns, edges = S.fromList $ es, src = 0, sink = sink }
     where
       fromNodes nodes = M.fromList $ map (\(Node i n) -> (i, Node i n)) nodes
 
+computeGraph :: [Stmt] -> CFGState ID
+computeGraph stmts = computeStmt (progToComp stmts) where
+  progToComp ss = foldl1 Comp ss
+
+-- old impl that doesn't "cheat" and convert to Composition
+-- computeGraph :: [Stmt] -> CFGState ID
+-- computeGraph []     = return 0
+-- computeGraph (s:ss) = foldl computeAndConnect (computeStmt s) ss where
+--   computeAndConnect :: CFGState ID -> Stmt -> CFGState ID
+--   computeAndConnect prevComp stmt1 = do
+--     u <- prevComp
+--     v <- fst' <$> get
+--     newEdge' u v
+--     computeStmt stmt1
+
+fst' :: (a,b,c) -> a
+fst' (a,_,_) = a
+
+newEdge :: ID -> ID -> CFGEdgeData -> CFGState ()
+newEdge u v ed = do
+  (i, ns, es) <- get
+  let edge = Edge (u,v) ed
+  put (i, ns, edge:es)
+newEdge' :: ID -> ID -> CFGState ()
+newEdge' u v = newEdge u v NoData
+
 -- Return value is ID of last created node
 -- The state contains the ID of the *next* node!
-computeGraph :: Stmt -> CFGState ID
-computeGraph s' =
+computeStmt :: Stmt -> CFGState ID
+computeStmt s' =
   case s' of
     Skip -> pred . fst' <$> get -- pred is (\x -> x - 1)
     Ass v e -> newNode (CFGStmt $ Ass v e)
     ITE e tr fl -> do
       condi <- newNode (Cond e) -- cond index
-      trid <- computeGraph tr -- true index
-      flid <- computeGraph fl -- false index
+      trid <- computeStmt tr -- true index
+      flid <- computeStmt fl -- false index
       newEdge condi trid (Branch True)
       newEdge condi flid (Branch False)
       confid <- newNode ConfPoint
@@ -178,35 +206,29 @@ computeGraph s' =
       newEdge' flid confid
       return confid
     Comp s1 s2 -> do
-      u <- computeGraph s1
+      u <- computeStmt s1
       let ed = case s1 of
                     While _ _ -> Branch False
                     _         -> NoData
       v <- fst' <$> get
       newEdge u v ed
-      computeGraph s2
+      computeStmt s2
     While e s -> do
       confid <- newNode ConfPoint -- confluence id
       condid <- newNode (Cond e)  -- conditional id
       newEdge' confid condid
       newEdge condid (condid+1) (Branch True) -- edge from condition to true branch
-      trid <- computeGraph s -- the end of the true branch
+      trid <- computeStmt s -- the end of the true branch
       newEdge' trid confid
       return condid
+    Output e -> newNode (CFGStmt $ Output e)
   where
-    fst' (a,_,_) = a
     newNode :: CFGNodeData -> CFGState ID
     newNode n = do
       (i,ns,es) <- get
       let n' = Node i n
       put (i+1,n':ns,es)
       return $ i
-    newEdge :: ID -> ID -> CFGEdgeData -> CFGState ()
-    newEdge u v ed = do
-      (i, ns, es) <- get
-      let edge = Edge (u,v) ed
-      put (i, ns, edge:es)
-    newEdge' u v = newEdge u v NoData
 
 data ProgPoint =
   PP { dependent :: Set ID, node :: CFGNodeData }
@@ -251,16 +273,18 @@ solveFix l bigT =
   let l' = bigT l
   in  if (l == l') then l else solveFix l' bigT
 
-collectExprs :: Stmt -> Set Expr
-collectExprs stmt = case stmt of
-  Skip -> S.empty
-  Ass _ e -> exprs e
-  ITE e t f -> exprs e `union` collectExprs t `union` collectExprs f
-  Comp s1 s2 -> collectExprs s1 `union` collectExprs s2
-  While e s -> exprs e `union` collectExprs s
+collectExprs :: [Stmt] -> Set Expr
+collectExprs stmts = foldl union S.empty $ map collectExprs' stmts where
+  collectExprs' stmt = case stmt of
+    Skip -> S.empty
+    Ass _ e -> exprs e
+    ITE e t f -> exprs e `union` collectExprs' t `union` collectExprs' f
+    Comp s1 s2 -> collectExprs' s1 `union` collectExprs' s2
+    While e s -> exprs e `union` collectExprs' s
+    Output e  -> exprs e
 
 
-analyzeProg :: Stmt -> [Lattice]
+analyzeProg :: [Stmt] -> [Lattice]
 analyzeProg prog = solveFix initial bigT where
   allExprs = collectExprs prog
   progps = cfgToProgP $ cfg prog

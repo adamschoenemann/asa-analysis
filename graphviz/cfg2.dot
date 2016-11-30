@@ -1,7 +1,7 @@
-digraph cfg2 {
+digraph CFG2 {
 	0 [shape=box,label="x := a * b;"]
 	1
-	2 [shape=diamond,label="20 * c > a * b"]
+	2 [shape=diamond,label="(20 * c) > (a * b)"]
 	3 [shape=box,label="a := 20 + a;"]
 	4 [shape=box,label="c := c - 1;"]
 	5 [shape=box,label="z := 20 * 30;"]
@@ -11,7 +11,7 @@ digraph cfg2 {
 	0 -> 1
 	1 -> 2
 	2 -> 3 [label="True"]
-	2 -> 5 [label="False"]
+	2 -> 5
 	3 -> 4
 	4 -> 1
 	5 -> 6

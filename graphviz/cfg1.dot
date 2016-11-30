@@ -1,6 +1,6 @@
-digraph cfg1 {
+digraph CFG1 {
 	0 [shape=box,label="x := a * b;"]
-	1 [shape=diamond,label="a * b > 20 * c"]
+	1 [shape=diamond,label="(a * b) > (20 * c)"]
 	2 [shape=box,label="y := 20 + a;"]
 	3 [shape=box,label="y := 30 + c;"]
 	4

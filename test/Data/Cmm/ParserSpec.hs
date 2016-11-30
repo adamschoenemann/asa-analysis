@@ -1,6 +1,6 @@
 {-# LANGUAGE QuasiQuotes, OverloadedStrings #-}
 
-module Data.Cmm.ASTSpec (main, spec) where
+module Data.Cmm.ParserSpec (main, spec) where
 
 import Data.Cmm.AST()
 import Data.Cmm.Parser
@@ -13,7 +13,7 @@ import Data.Either (isRight)
 main :: IO ()
 main = hspec spec
 
-in1, in2, in3 :: String
+in1, in2, in3, in4 :: String
 
 in1 =
   [N.string|
@@ -51,12 +51,26 @@ in3 =
     }
   |]
 
+in4 =
+  [N.string|
+    x := 2 < 10;
+    if x then {
+      if false then {
+        output y;
+      } else {
+        output y * ((10 + 2) - 1);
+      }
+    } else {
+      y := 100 - (10 * 10);
+    }
+  |]
+
 inputs :: [String]
-inputs = [in1, in2, in3]
+inputs = [in1, in2, in3, in4]
 
 spec :: Spec
 spec = do
-  describe "Data.Cmm.AST" $ do
+  describe "Data.Cmm.Parser" $ do
     -- of course, this is not generally true, but for these
     -- specific programs, it should be
     it "satisfies id = ppr . parse" $ do

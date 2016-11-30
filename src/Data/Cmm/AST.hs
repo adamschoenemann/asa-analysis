@@ -12,8 +12,8 @@ data Expr
   | Gt  Expr Expr
   | Lt  Expr Expr
   | Eq  Expr Expr
-  | BConst Bool
-  | IConst Int
+  | BLit Bool
+  | ILit Int
   | Var String
   | Input
   deriving (Eq, Ord, Show)
@@ -30,8 +30,8 @@ ppExpr expression = help 0 expression where
       Gt  e1 e2 -> parens $ help (i+1) e1 ++ " > "  ++ help (i+1) e2
       Lt  e1 e2 -> parens $ help (i+1) e1 ++ " < "  ++ help (i+1) e2
       Eq  e1 e2 -> parens $ help (i+1) e1 ++ " == " ++ help (i+1) e2
-      IConst x  -> show x
-      BConst b  -> uncapitalize (show b)
+      ILit x  -> show x
+      BLit b  -> uncapitalize (show b)
       Var n     -> n
       Input     -> "input"
 
@@ -44,20 +44,22 @@ data Stmt
   | ITE Expr Stmt Stmt
   | Comp Stmt Stmt
   | While Expr Stmt
+  | Output Expr
   deriving (Eq, Ord, Show)
 
 ppStmt :: Int -> Stmt -> String
 ppStmt n stmt =
-  let ident i = replicate (i*2) ' '
+  let indent i = replicate (i*2) ' '
   in case stmt of
-    Skip -> ident n ++ "skip;"
-    Ass v e -> ident n ++ v ++ " := " ++ ppExpr e ++ ";"
-    ITE e s1 s2 ->    ident n ++ "if " ++ ppExpr e ++ " then {\n"
-                   ++ ppStmt (n+1) s1 ++ "\n" ++ ident n ++ "} else {\n"
-                   ++ ppStmt (n+1) s2 ++ "\n" ++ ident n ++ "}"
+    Skip -> indent n ++ "skip;"
+    Ass v e -> indent n ++ v ++ " := " ++ ppExpr e ++ ";"
+    ITE e s1 s2 ->    indent n ++ "if " ++ ppExpr e ++ " then {\n"
+                   ++ ppStmt (n+1) s1 ++ "\n" ++ indent n ++ "} else {\n"
+                   ++ ppStmt (n+1) s2 ++ "\n" ++ indent n ++ "}"
     Comp s1 s2 -> ppStmt n s1 ++ "\n" ++ ppStmt n s2
-    While e s  ->    ident n ++ "while " ++ ppExpr e ++ " do {\n"
-                  ++ ppStmt (n+1) s ++ "\n" ++ ident n ++ "}"
+    While e s  ->    indent n ++ "while " ++ ppExpr e ++ " do {\n"
+                  ++ ppStmt (n+1) s ++ "\n" ++ indent n ++ "}"
+    Output e   -> indent n ++ "output " ++ ppExpr e ++ ";"
 
 instance Pretty Stmt where
   ppr = ppStmt 0
