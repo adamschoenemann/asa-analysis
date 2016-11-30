@@ -8,7 +8,7 @@ import qualified Data.Map.Strict as M
 import qualified Data.Set as S
 import Data.Set (Set)
 
-data Node       a = Node ID a deriving (Show)
+data Node       a = Node { getID :: ID, getData :: a } deriving (Show)
 data Edge       e = Edge { endpoints :: (ID,ID), info :: e } deriving (Show, Ord, Eq)
 
 type ID = Int

@@ -85,17 +85,19 @@ computeStmt s' =
     Ass v e -> newNode (CFGStmt $ Ass v e)
     ITE e tr fl -> do
       condi <- newNode (Cond e) -- cond index
-      trid <- computeStmt tr -- true index
-      flid <- computeStmt fl -- false index
+      trid <- computeStmt tr -- ID of END of true branch
+      flid <- computeStmt fl -- ID of END of false branch
+      -- ID of START of true branch is (conditional ID) + 1
       newEdge condi (condi + 1) (Branch True)
-      newEdge condi flid (Branch False)
+      -- ID of START of false branch is (END of true branch) + 1
+      newEdge condi (trid + 1) (Branch False)
       confid <- newNode ConfPoint
       newEdge' trid confid
       newEdge' flid confid
       return confid
-    Block [] -> fst' <$> get
+    Block [] -> (pred . fst') <$> get
     Block ss -> computeBlock ss where
-        computeBlock [] = fst' <$> get
+        computeBlock [] = (pred . fst') <$> get
         computeBlock [s1] = computeStmt s1
         computeBlock (s1:stmts) = do
             u <- computeStmt s1

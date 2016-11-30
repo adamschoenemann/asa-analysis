@@ -13,6 +13,8 @@ import Data.List (sort)
 import Data.Graph
 import Data.Cmm.AST
 import Anal.CFG
+import Text.Pretty
+import Data.List (intercalate)
 
 type Lattice = Set Expr
 type TFun = Lattice -> Lattice
@@ -119,7 +121,7 @@ cfg2 = cfg prog2
 
 
 data ProgPoint =
-  PP { dependent :: Set ID, node :: CFGNodeData }
+  PP { dependent :: Set ID, node :: Node CFGNodeData }
      deriving (Show)
 
 cfgToProgP :: Graph CFGNodeData CFGEdgeData -> [ProgPoint]
@@ -127,7 +129,7 @@ cfgToProgP (Graph {nodes, edges, src, sink}) =
   map nodeToProgP (M.elems nodes) where
     nodeToProgP node@(Node i inner) =
       let dependent = incoming i
-      in  PP { dependent = dependent, node = inner }
+      in  PP { dependent = dependent, node = node }
     incoming i = S.map fst . S.filter ((i == ) . snd) $ S.map endpoints edges
 
 
@@ -144,12 +146,13 @@ progPsToEqs points = map pointToEq points where
     | S.null deps = S.empty
     | otherwise = foldl1 S.intersection . map (\d -> prev !! d) . S.toList $ deps
   pointToEq (PP { dependent, node }) prev =
-    case node of
-      -- Conditionals and Stmts only have one incoming edge!
-      Cond expr     -> avail expr $ singleDepOrEmpty dependent prev
-      CFGStmt stmt  -> stmtToTFun stmt $ singleDepOrEmpty dependent prev
-      -- Confluence points have more (actually only 2)
-      ConfPoint     -> leastUpperBound prev dependent
+    let Node i nd = node
+    in  case nd of
+          -- Conditionals and Stmts only have one incoming edge!
+          Cond expr     -> avail expr $ singleDepOrEmpty dependent prev
+          CFGStmt stmt  -> stmtToTFun stmt $ singleDepOrEmpty dependent prev
+          -- Confluence points have more (actually only 2)
+          ConfPoint     -> leastUpperBound prev dependent
 
 type BigT = [Lattice] -> [Lattice]
 
@@ -172,9 +175,12 @@ collectExprs stmts = foldl union S.empty $ map collectExprs' stmts where
     Output e  -> exprs e
 
 
-analyzeProg :: [Stmt] -> [Lattice]
-analyzeProg prog = solveFix initial bigT where
+analyzeProg :: [Stmt] -> [(ID, Lattice)]
+analyzeProg prog = zip (map (getID . node) progps) $ solveFix initial bigT where
   allExprs = collectExprs prog
   progps = cfgToProgP $ cfg prog
   bigT = eqsToBigT . progPsToEqs $ progps
   initial = replicate (length progps) allExprs
+
+printAnalysis :: [Stmt] -> IO ()
+printAnalysis = mapM_ (\(i, r) -> putStrLn $ (show i ++ ": " ++ (intercalate ",   " . map ppr . S.toList $ r))) . analyzeProg
