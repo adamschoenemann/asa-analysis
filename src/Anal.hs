@@ -15,7 +15,6 @@ import Text.Pretty
 class (Ord a, Eq a) => Lat a where
   bottom :: a
 
-
 -- Transfer Function
 type TFun a = a -> a
 

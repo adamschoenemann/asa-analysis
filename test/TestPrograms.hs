@@ -4,7 +4,7 @@ module TestPrograms where
 
 import NeatInterpolation
 
-in1, in2, in3, in4, in5 :: String
+in1, in2, in3, in4, in5, in6, in7, in8, in9 :: String
 
 in1 =
   [string|
@@ -68,5 +68,46 @@ in5 =
     output 2;
   |]
 
+in6 =
+  [string|
+    x := 10;
+    y := x * 2;|]
+
+in7 =
+  [string|
+    x := 2;
+    if z < x then
+      y := 10;
+    else
+      y := 42;
+    output y;|]
+
+in8 =
+  [string|
+    x := 3;
+    if true then
+      y := 10;
+    else
+      y := 42;
+    output y;|]
+
+in9 =
+  [string|
+    x := 10;
+    y := 11;
+    u := x * (10 - y);
+    v := x * input;
+    if x < 10 then
+      z := 12;
+    else
+      z := 24;
+    output z;|]
+
+in10 =
+  [string|
+
+  |]
+
 testPrograms :: [(String, String)]
-testPrograms = [("in1", in1), ("in2", in2), ("in3", in3), ("in4", in4), ("in5", in5)]
+testPrograms = [ ("in1", in1), ("in2", in2), ("in3", in3), ("in4", in4), ("in5", in5)
+               , ("in6", in6), ("in7", in7), ("in8", in8), ("in9", in9)]

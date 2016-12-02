@@ -66,7 +66,7 @@ collectExprs stmts = foldl union S.empty $ map collectExprs' stmts where
     Output e  -> exprs e
 
 instance Lat (Set Expr) where
-  bottom = S.empty
+  bottom = S.empty -- actually, this is top
 
 available :: Analysis (Set Expr)
 available =
