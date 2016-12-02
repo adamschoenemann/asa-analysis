@@ -2,7 +2,6 @@
 
 module Anal where
 
-import Control.Monad.Fix
 import Data.Set (Set, union, (\\))
 import Data.Map.Strict (Map)
 import qualified Data.Map.Strict as M
@@ -71,6 +70,19 @@ solveFix :: Lat a => [a] -> BigT a -> [a]
 solveFix l bigT =
   let l' = bigT l
   in  if (l == l') then l else solveFix l' bigT
+
+-- fixpoint operator!
+fix :: (a -> a) -> a
+fix f =
+  let x = f x
+  in  x
+
+-- solveFix without explicit recursion
+solveFix' :: Lat a => [a] -> BigT a -> [a]
+solveFix' = fix (\f l bigT ->
+                    let l' = bigT l
+                    in if (l == l') then l else f l' bigT
+                )
 
 
 analyzeProg :: Lat a => Analysis a -> [Stmt] -> [(ID, a)]
