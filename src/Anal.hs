@@ -14,6 +14,7 @@ import Text.Pretty
 
 class (Ord a, Eq a) => Lat a where
   bottom :: a
+  leastUpperBound :: [a] -> a
 
 -- Transfer Function
 type TFun a = a -> a
@@ -37,16 +38,16 @@ type Equation a = [a] -> a
 data Analysis a where
   Analysis :: Lat a => { stmtToTFun :: Stmt -> TFun a
                        , exprToTFun :: Expr -> TFun a
-                       , leastUpperBound :: [a] -> a
-                       , initialLattice :: [Stmt] -> a
+                       , initialEnv :: [Stmt] -> a
+                       , firstPPEnv :: a -- first program point environment
                        } -> Analysis a
 
 progPsToEqs :: Lat a => Analysis a -> [ProgPoint] -> [Equation a]
 progPsToEqs anal points = map pointToEq points where
   singleDepOrEmpty deps
-    | S.null deps        = const bottom
+    | S.null deps        = const (firstPPEnv anal)
     | S.size deps == 1 = let h = S.elemAt 0 deps in (!! h)
-    | otherwise          = error "Only call this function on singleton  or empty sets :("
+    | otherwise          = error "Only call this function on singleton or empty sets :("
   findDeps :: [a] -> Set ID -> [a]
   findDeps prev deps
     | S.null deps = []
@@ -58,13 +59,14 @@ progPsToEqs anal points = map pointToEq points where
           Cond expr     -> (exprToTFun anal) expr $ singleDepOrEmpty dependent prev
           CFGStmt stmt  -> (stmtToTFun anal) stmt $ singleDepOrEmpty dependent prev
           -- Confluence points have more (actually only 2)
-          ConfPoint     -> (leastUpperBound anal) (findDeps prev dependent)
+          ConfPoint     -> leastUpperBound (findDeps prev dependent)
 
 type BigT a = [a] -> [a]
 
 eqsToBigT :: Lat a => [Equation a] -> BigT a
 eqsToBigT eqs l = map ($ l) eqs
 
+-- solve the recursive equations with the fixpoint theorem!
 solveFix :: Lat a => [a] -> BigT a -> [a]
 solveFix l bigT =
   let l' = bigT l
@@ -73,7 +75,7 @@ solveFix l bigT =
 
 analyzeProg :: Lat a => Analysis a -> [Stmt] -> [(ID, a)]
 analyzeProg anal prog = zip (map (getID . node) progps) $ solveFix initial bigT where
-  initialL = (initialLattice anal) prog
+  initialL = (initialEnv anal) prog
   progps = cfgToProgP $ cfg prog
   bigT = eqsToBigT . progPsToEqs anal $ progps
   initial = replicate (length progps) initialL

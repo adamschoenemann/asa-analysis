@@ -2,12 +2,10 @@
 
 module Anal.ConstProp where
 
-import Data.Set (Set, union, (\\))
-import qualified Data.Set as S
 import Anal
 import Data.Cmm.AST
 import Text.Pretty
-import Data.List (intercalate)
+-- import Data.List (intercalate)
 import Data.Map.Strict (Map)
 import qualified Data.Map.Strict as M
 
@@ -20,6 +18,15 @@ data CPLat
 
 instance Lat CPLat where
   bottom = CPBot
+  leastUpperBound = foldl1 cpLUP
+
+cpLUP :: CPLat -> CPLat -> CPLat
+cpLUP CPTop _  = CPTop
+cpLUP _ CPTop  = CPTop
+cpLUP CPBot l2 = l2
+cpLUP l1 CPBot = l1
+cpLUP l1 l2    =
+  if l1 == l2 then l1 else CPTop
 
 instance Pretty CPLat where
   ppr = show
@@ -28,6 +35,7 @@ type Env = Map String CPLat
 
 instance Lat Env where
   bottom = M.empty
+  leastUpperBound = envLUP
 
 instance Pretty Env where
   ppr = show
@@ -39,10 +47,11 @@ cpStmtToTFun :: Stmt -> TFun Env
 cpStmtToTFun stmt = case stmt of
   Skip         -> id
   Ass v e      -> \env -> M.insert v (evalExpr e env) env
-  ITE b s1 s2  -> id
-  Block (s:ss) -> cpStmtToTFun s
-  While b s    -> id
-  Output e     -> id
+  ITE _ _ _    -> id
+  Block []     -> id
+  Block (s:_)  -> cpStmtToTFun s
+  While _ _    -> id
+  Output _     -> id
 
 evalExpr :: Expr -> Env -> CPLat
 evalExpr e env = case e of
@@ -65,13 +74,15 @@ evalExpr e env = case e of
     latOp op (CPInt i1)  (CPInt  i2) = op $ Left  (i1, i2)
     latOp op (CPBool b1) (CPBool b2) = op $ Right (b1, b2)
     latOp _ _ _ = invalid
+    -- an operator that takes two ints an input
     intop  :: ((Int, Int)   -> CPLat) -> CPLat -> CPLat -> CPLat
-    boolop :: ((Bool, Bool) -> CPLat) -> CPLat -> CPLat -> CPLat
     intop  iop = latOp $ either iop (const invalid)
-    boolop bop = latOp $ either (const invalid) bop
-    add  = intop $ CPInt  . uncurry (+)
-    sub  = intop $ CPInt  . uncurry (-)
-    mul  = intop $ CPInt  . uncurry (*)
+    -- an operator that takes two bools as input
+    -- boolop :: ((Bool, Bool) -> CPLat) -> CPLat -> CPLat -> CPLat
+    -- boolop bop = latOp $ either (const invalid) bop
+    add  = intop  $ CPInt  . uncurry (+)
+    sub  = intop  $ CPInt  . uncurry (-)
+    mul  = intop  $ CPInt  . uncurry (*)
     gt   = intop $ CPBool . uncurry (>)
     lt   = intop $ CPBool . uncurry (<)
     eq   = latOp $ CPBool . either (uncurry (==)) (uncurry (==))
@@ -86,17 +97,11 @@ cpInitial = const bottom
 envLUP :: [Env] -> Env
 envLUP = intersectionsWith cpLUP where
   intersectionsWith fn = foldl1 (M.intersectionWith fn)
-  cpLUP CPTop _  = CPTop
-  cpLUP _ CPTop  = CPTop
-  cpLUP CPBot l2 = l2
-  cpLUP l1 CPBot = l1
-  cpLUP l1 l2    =
-    if l1 == l2 then l1 else CPTop
 
 constProp :: Analysis Env
 constProp =
   Analysis { stmtToTFun = cpStmtToTFun -- :: Stmt -> TFun
            , exprToTFun = cpExprToTFun -- :: Expr -> TFun
-           , leastUpperBound = envLUP -- :: [Set Expr] -> Set Expr
-           , initialLattice = cpInitial -- :: [Stmt] -> Set Expr
+           , initialEnv = cpInitial -- :: [Stmt] -> Set Expr
+           , firstPPEnv = M.empty
            }

@@ -67,11 +67,12 @@ collectExprs stmts = foldl union S.empty $ map collectExprs' stmts where
 
 instance Lat (Set Expr) where
   bottom = S.empty -- actually, this is top
+  leastUpperBound = foldl1 S.intersection
 
 available :: Analysis (Set Expr)
 available =
   Analysis { stmtToTFun = availStmtToTFun -- :: Stmt -> TFun
            , exprToTFun = avail -- :: Expr -> TFun
-           , leastUpperBound = foldl1 S.intersection -- :: [Set Expr] -> Set Expr
-           , initialLattice = collectExprs -- :: [Stmt] -> Set Expr
+           , initialEnv = collectExprs -- :: [Stmt] -> Set Expr
+           , firstPPEnv = S.empty
            }
