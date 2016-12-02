@@ -11,6 +11,7 @@ import Data.Map (Map)
 import qualified Data.Map as M
 import Data.Set (Set)
 import qualified Data.Set as S
+import Utils (unsafeLookup)
 
 exp1 :: [(Int, [Expr])]
 exp1 = [
@@ -75,13 +76,6 @@ exp5 = [
 
 expected :: Map String [(Int, [Expr])]
 expected = M.fromList [("in1", exp1), ("in2", exp2), ("in3", exp3), ("in4", exp4), ("in5", exp5)]
-
-unsafeLookup :: Ord k => k -> Map k v -> v
-unsafeLookup k m =
-  case M.lookup k m of
-    Nothing -> error "unsafeLookup"
-    Just x  -> x
-
 
 main :: IO ()
 main = hspec spec

@@ -72,7 +72,6 @@ instance Lat (Set Expr) where
 available :: Analysis (Set Expr)
 available =
   Analysis { stmtToTFun = availStmtToTFun -- :: Stmt -> TFun
-           , exprToTFun = avail -- :: Expr -> TFun
            , initialEnv = collectExprs -- :: [Stmt] -> Set Expr
            , firstPPEnv = S.empty
            }

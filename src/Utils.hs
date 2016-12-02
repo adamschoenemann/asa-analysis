@@ -3,6 +3,14 @@ module Utils where
 
 import Data.Char (toUpper, toLower, isSpace)
 import Data.Functor ((<$>))
+import Data.Map (Map)
+import qualified Data.Map.Strict as M
+
+unsafeLookup :: Ord k => k -> Map k v -> v
+unsafeLookup k m =
+  case M.lookup k m of
+    Nothing -> error "unsafeLookup"
+    Just x  -> x
 
 uncons :: [a] -> Maybe (a, [a])
 uncons [] = Nothing

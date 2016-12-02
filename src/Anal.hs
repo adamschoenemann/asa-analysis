@@ -36,7 +36,6 @@ type Equation a = [a] -> a
 
 data Analysis a where
   Analysis :: Lat a => { stmtToTFun :: Stmt -> TFun a
-                       , exprToTFun :: Expr -> TFun a
                        , initialEnv :: [Stmt] -> a
                        , firstPPEnv :: a -- first program point environment
                        } -> Analysis a
@@ -53,10 +52,11 @@ progPsToEqs anal points = map pointToEq points where
     | otherwise = map (\d -> prev !! d) . S.toList $ deps
   pointToEq (PP { dependent, node }) prev =
     let Node i nd = node
+        singleStmt stmt = (stmtToTFun anal) stmt $ singleDepOrEmpty dependent prev
     in  case nd of
           -- Conditionals and Stmts only have one incoming edge!
-          Cond expr     -> (exprToTFun anal) expr $ singleDepOrEmpty dependent prev
-          CFGStmt stmt  -> (stmtToTFun anal) stmt $ singleDepOrEmpty dependent prev
+          Cond stmt     -> singleStmt stmt
+          CFGStmt stmt  -> singleStmt stmt
           -- Confluence points have more (actually only 2)
           ConfPoint     -> leastUpperBound (findDeps prev dependent)
 

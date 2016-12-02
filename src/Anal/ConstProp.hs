@@ -88,9 +88,6 @@ evalExpr e env = case e of
     eq   = latOp $ CPBool . either (uncurry (==)) (uncurry (==))
     invalid = error "invalid expression encountered"
 
-cpExprToTFun :: Expr -> TFun Env
-cpExprToTFun = const id
-
 cpInitial :: [Stmt] -> Env
 cpInitial = const bottom
 
@@ -101,7 +98,6 @@ envLUP = intersectionsWith cpLUP where
 constProp :: Analysis Env
 constProp =
   Analysis { stmtToTFun = cpStmtToTFun -- :: Stmt -> TFun
-           , exprToTFun = cpExprToTFun -- :: Expr -> TFun
            , initialEnv = cpInitial -- :: [Stmt] -> Set Expr
            , firstPPEnv = M.empty
            }
