@@ -18,7 +18,7 @@ data CPLat
 
 instance Lat CPLat where
   bottom = CPBot
-  leastUpperBound = foldl1 cpLUP
+  leastUpperBound = cpLUP
 
 cpLUP :: CPLat -> CPLat -> CPLat
 cpLUP CPTop _  = CPTop
@@ -91,13 +91,13 @@ evalExpr e env = case e of
 cpInitial :: [Stmt] -> Env
 cpInitial = const bottom
 
-envLUP :: [Env] -> Env
-envLUP = intersectionsWith cpLUP where
-  intersectionsWith fn = foldl1 (M.intersectionWith fn)
+envLUP :: Env -> Env -> Env
+envLUP = M.intersectionWith cpLUP
 
 constProp :: Analysis Env
 constProp =
   Analysis { stmtToTFun = cpStmtToTFun -- :: Stmt -> TFun
+           , condToTFun = \e -> id
            , initialEnv = cpInitial -- :: [Stmt] -> Set Expr
            , firstPPEnv = M.empty
            }

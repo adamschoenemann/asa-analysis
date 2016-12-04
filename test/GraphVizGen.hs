@@ -2,10 +2,10 @@
 module GraphVizGen where
 
 import TestPrograms
-import Anal.CFG (cfg, writeVizCfg)
+import Data.CFG (progToCfg, writeVizCfg)
 import Data.Cmm.Parser (parse, program)
 
 generateGviz :: IO ()
 generateGviz = mapM_ fun testPrograms where
-  fun (nm, prog) = either (error "did not parse") (\p -> writeVizCfg (cfg p) nm) $
+  fun (nm, prog) = either (error "did not parse") (\p -> writeVizCfg (progToCfg p) nm) $
                       parse program nm prog

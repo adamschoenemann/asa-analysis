@@ -5,7 +5,7 @@ import Test.Hspec
 import Data.Cmm.Parser
 import TestPrograms
 import Data.Either (isRight)
-import Anal.CFG
+import Data.CFG
 
 main :: IO ()
 main = hspec spec
@@ -26,4 +26,4 @@ testCfgProgram (nm, progstr) = do
   putStrLn $ graphName ++ ":"
   putStrLn progstr
   putStrLn ""
-  writeVizCfg (cfg p) graphName
+  writeVizCfg (progToCfg p) graphName

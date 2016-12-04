@@ -8,6 +8,6 @@ main = hspec spec
 
 spec :: Spec
 spec = do
-  describe "Anal.Available" $ do
+  describe "Anal.ConstProp" $ do
     it "should work" $ do
       True `shouldBe` True

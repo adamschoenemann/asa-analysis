@@ -6,29 +6,17 @@ import Data.Set (Set, union, (\\))
 import Data.Map.Strict (Map)
 import qualified Data.Map.Strict as M
 import qualified Data.Set as S
-import Data.Graph
 import Data.Cmm.AST
-import Anal.CFG
+import Data.CFG
+import Data.ProgPoint
 import Text.Pretty
 
 class (Ord a, Eq a) => Lat a where
   bottom :: a
-  leastUpperBound :: [a] -> a
+  leastUpperBound :: a -> a -> a
 
 -- Transfer Function
 type TFun a = a -> a
-
-data ProgPoint =
-  PP { dependent :: Set ID, node :: Node CFGNodeData }
-     deriving (Show)
-
-cfgToProgP :: Graph CFGNodeData CFGEdgeData -> [ProgPoint]
-cfgToProgP (Graph {nodes, edges, src, sink}) =
-  map nodeToProgP (M.elems nodes) where
-    nodeToProgP node@(Node i inner) =
-      let dependent = incoming i
-      in  PP { dependent = dependent, node = node }
-    incoming i = S.map fst . S.filter ((i == ) . snd) $ S.map endpoints edges
 
 -- a function from dependencies to a single lattice element
 type Equation a = [a] -> a
@@ -36,29 +24,21 @@ type Equation a = [a] -> a
 
 data Analysis a where
   Analysis :: Lat a => { stmtToTFun :: Stmt -> TFun a
+                       , condToTFun :: Expr -> TFun a
                        , initialEnv :: [Stmt] -> a
                        , firstPPEnv :: a -- first program point environment
                        } -> Analysis a
 
 progPsToEqs :: Lat a => Analysis a -> [ProgPoint] -> [Equation a]
 progPsToEqs anal points = map pointToEq points where
-  singleDepOrEmpty deps
-    | S.null deps        = const (firstPPEnv anal)
-    | S.size deps == 1 = let h = S.elemAt 0 deps in (!! h)
-    | otherwise          = error "Only call this function on singleton or empty sets :("
-  findDeps :: [a] -> Set ID -> [a]
-  findDeps prev deps
-    | S.null deps = []
-    | otherwise = map (\d -> prev !! d) . S.toList $ deps
-  pointToEq (PP { dependent, node }) prev =
-    let Node i nd = node
-        singleStmt stmt = (stmtToTFun anal) stmt $ singleDepOrEmpty dependent prev
-    in  case nd of
-          -- Conditionals and Stmts only have one incoming edge!
-          Cond stmt     -> singleStmt stmt
-          CFGStmt stmt  -> singleStmt stmt
-          -- Confluence points have more (actually only 2)
-          ConfPoint     -> leastUpperBound (findDeps prev dependent)
+  pointToEq (PP dependent (k, node)) prev =
+    case node of
+      Source o              -> firstPPEnv anal
+      Single stmt i o       -> (stmtToTFun anal $ stmt) (prev !! i)
+      CondITE e i bt bf     -> (condToTFun anal $ e)    (prev !! i)
+      CondWhile e i bt bf   -> (condToTFun anal $ e)    (prev !! i)
+      Confluence (i1, i2) o -> leastUpperBound (prev !! i1) (prev !! i2)
+      Sink i                -> prev !! i
 
 type BigT a = [a] -> [a]
 
@@ -86,9 +66,9 @@ solveFix' = fix (\f l bigT ->
 
 
 analyzeProg :: Lat a => Analysis a -> [Stmt] -> [(ID, a)]
-analyzeProg anal prog = zip (map (getID . node) progps) $ solveFix initial bigT where
+analyzeProg anal prog = zip (map (fst . node) progps) $ solveFix initial bigT where
   initialL = (initialEnv anal) prog
-  progps = cfgToProgP $ cfg prog
+  progps = cfgToProgP $ progToCfg prog
   bigT = eqsToBigT . progPsToEqs anal $ progps
   initial = replicate (length progps) initialL
 
