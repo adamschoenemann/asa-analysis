@@ -55,15 +55,20 @@ in4 =
 in5 =
   [string|
     skip;
-    {
+    skip;
+    x := 2 * 20;
+    if x < 41 then {
+      output x;
+      i := 10;
+      while i > 0 do
+        output x;
       skip;
+    } else {
+      w := false;
       skip;
-      x := 2 * 20;
-      {
-        skip;
-        output 10;
-      }
     }
+    skip;
+    output 10;
     skip;
     output 2;
   |]
@@ -87,8 +92,10 @@ in8 =
     x := 3;
     if true then
       y := 10;
-    else
+    else {
       y := 42;
+      output y;
+    }
     output y;|]
 
 in9 =

@@ -18,17 +18,20 @@ program :: Parser [Stmt]
 program = many (stmt <* spaces)
 
 stmt :: Parser Stmt
-stmt =  (const Skip) <$> string "skip" <* spaces <* char ';' <* spaces
-    <|> ITE <$> (string "if" *> spaces1 *> expr) <*>
-                     (string "then" *> spaces1 *> stmt <* spaces) <*>
-                     (string "else" *> spaces1 *> stmt <* spaces)
-    <|> While <$> (string "while" *> spaces1 *> expr) <*>
-                     (string "do" *> spaces1 *> stmt) <* spaces
-    <|> Output <$> (string "output" *> spaces1 *> expr <* char ';') <* spaces
+stmt =  (const Skip) <$> trystring "skip" <* spaces <* char ';' <* spaces
+    <|> ITE <$> (trystring "if" *> spaces1 *> expr) <*>
+                     (trystring "then" *> spaces1 *> stmt <* spaces) <*>
+                     (trystring "else" *> spaces1 *> stmt <* spaces)
+    <|> While <$> (trystring "while" *> spaces1 *> expr) <*>
+                     (trystring "do" *> spaces1 *> stmt) <* spaces
+    <|> Output <$> (trystring "output" *> spaces1 *> expr <* char ';') <* spaces
     <|> Ass <$> (ident <* spaces) <*> (string ":=" *> spaces *> expr <* char ';') <* spaces
     <|> Block <$> (brackets block) <* spaces
       where
         block = sepBy stmt spaces
+
+trystring :: String -> Parser String
+trystring = try . string
 
 spaces1 :: Parser String
 spaces1 = many1 space

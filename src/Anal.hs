@@ -35,8 +35,8 @@ progPsToEqs anal points = map pointToEq points where
     case node of
       Source o              -> firstPPEnv anal
       Single stmt i o       -> (stmtToTFun anal $ stmt) (prev !! i)
-      CondITE e i bt bf     -> (condToTFun anal $ e)    (prev !! i)
-      CondWhile e i bt bf   -> (condToTFun anal $ e)    (prev !! i)
+      CondITE e i bt bf _   -> (condToTFun anal $ e)    (prev !! i)
+      CondWhile e i bt bf _ -> (condToTFun anal $ e)    (prev !! i)
       Confluence (i1, i2) o -> leastUpperBound (prev !! i1) (prev !! i2)
       Sink i                -> prev !! i
 

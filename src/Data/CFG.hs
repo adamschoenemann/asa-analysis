@@ -1,6 +1,7 @@
-
+{-# LANGUAGE DeriveGeneric #-}
 module Data.CFG where
 
+import GHC.Generics (Generic)
 import Data.Cmm.AST
 import Control.Monad.State
 import qualified Data.Map.Strict as M
@@ -11,25 +12,38 @@ import Utils (unsafeLookup)
 import Data.List (intercalate)
 import Text.Pretty
 import Debug.Trace
+import Control.DeepSeq
 
-type NodeRef = Int
-type In = Int
-type Out = Int
 type ID = Int
-type BrTrue = Int
-type BrFalse = Int
-type End = Int
+type In = ID
+type Out = ID
+type BrTrue = ID
+type BrFalse = ID
+type End = ID
 
 data Node
   = Source Out
   | Single Stmt In Out
-  | CondITE Expr In BrTrue BrFalse
-  | CondWhile Expr In BrTrue BrFalse
+  | CondITE Expr In BrTrue BrFalse End -- end of the conditional (points to confluence)
+  | CondWhile Expr In BrTrue BrFalse End -- end of the conditional (points to confluence)
   | Confluence (In, In) Out
   | Sink In
-  deriving (Show, Eq)
+  deriving (Show, Eq, Generic)
 
-data CFG = CFG (Map ID Node) deriving (Show, Eq)
+instance NFData Node
+
+getOutgoing :: Node -> [ID]
+getOutgoing node = case node of
+  Source o              -> [o]
+  Single s i o          -> [o]
+  CondITE e i bt bf c   -> [bt,bf]
+  CondWhile e i bt bf c -> [bt,bf]
+  Confluence (i1, i2) o -> [o]
+  Sink i                -> []
+
+data CFG = CFG (Map ID Node) deriving (Show, Eq, Generic)
+
+instance NFData CFG where
 
 type CFGState a = State [(ID,Node)] a
 
@@ -40,15 +54,15 @@ cfgToGviz name (CFG m) =
   in  "digraph " ++ name ++ " {\n" ++ content ++ "}" where
     attrs as = " [" ++ intercalate "," (map (\(a,b) -> a ++ "=\"" ++ b ++ "\"") as) ++ "]"
     label l  = ("label", l)
-    backedge k o = "\n  " ++ show k ++ " -> " ++ show o ++ " [style=dashed]"
+    backedge k o = "" -- "\n  " ++ show k ++ " -> " ++ show o ++ " [style=dashed]"
     gviz k n = case n of
       Source o              -> (show k ++ attrs [("shape", "point")],     show k ++ " -> " ++ show o)
       Single s i o          -> (show k ++ attrs [label (ppr s), ("shape", "box")],
                                 show k ++ " -> " ++ show o ++ backedge k i)
-      CondITE e i bt bf     -> (show k ++ attrs [label (ppr e), ("shape","diamond")],
+      CondITE e i bt bf _   -> (show k ++ attrs [label (ppr e), ("shape","diamond")],
                                 show k ++ " -> " ++ show bt ++ "[label=\"True\"]\n  " ++ show k ++ " -> " ++ show bf ++ "[label=\"False\"]"
                                 ++ backedge k i)
-      CondWhile e i bt bf   -> (show k ++ attrs [label (ppr e), ("shape", "diamond")],
+      CondWhile e i bt bf _ -> (show k ++ attrs [label (ppr e), ("shape", "diamond")],
                                 show k ++ " -> " ++ show bt ++ "[label=\"True\"]\n  " ++ show k ++ " -> " ++ show bf ++ "[label=\"False\"]"
                                 ++ backedge k i)
       Confluence (i1, i2) o -> (show k ++ attrs [("shape", "circle")],show k ++ " -> " ++ show o ++ backedge k i1 ++ backedge k i2)
@@ -85,7 +99,7 @@ cfgStmt p i stmt = case stmt of
   ITE e tr fl -> do
     (trid, trb) <- cfgStmt i (i+1)    tr
     (flid, flb) <- cfgStmt i (trid+1) fl
-    _ <- newNode i $ CondITE e (i-1) (i+1) (trid+1)
+    _ <- newNode i $ CondITE e (i-1) (i+1) (trid+1) (flid+1)
     let fun = \j -> newNode (flid+1) $ Confluence (trid, flid) j
     _ <- trb (flid + 1)
     _ <- flb (flid + 1)
@@ -103,9 +117,8 @@ cfgStmt p i stmt = case stmt of
     (trid, trb) <- cfgStmt (i+1) (i+2) tr -- create true branch
     _ <- trb i -- make end of true branch point to confluence
     _ <- newNode i     $ Confluence (i-1, trid) (i+1) -- create confluence
-    let fun = \j -> newNode (i+1) $ CondWhile e i (i+2) (trid+1) -- create conditional node
+    let fun = \j -> newNode (i+1) $ CondWhile e i (i+2) (trid+1) i -- create conditional node
     return (trid, fun)
-  s -> error $ "unexpected " ++ show s
 
 newNode :: Int -> Node -> CFGState ID
 newNode i n = modify ((i,n):) >> return i
@@ -115,20 +128,22 @@ cfgToProgram g@(CFG nodes) =
   let source = unsafeLookup 0 nodes
   in  fst $ nodeToProgram (0,source) g
 
-nodeToProgram :: (Int,Node) -> CFG -> ([Stmt], ID)
+nodeToProgram :: (ID,Node) -> CFG -> ([Stmt], ID)
 nodeToProgram n (CFG nodes) = help n proceed where
   getNode :: ID -> (ID, Node)
   getNode i = (i,unsafeLookup i nodes)
-  proceed _ next = help (getNode next) proceed
-  stop    i next = ([], i)
+
+  proceed _ next  = help (getNode next) proceed
+  stop    i next  = ([], i)
+  stopIf j i next = if j == i then ([], i) else help (getNode next) (stopIf j)
 
   help :: (ID, Node) -> (Int -> Int -> ([Stmt], ID)) -> ([Stmt], ID)
   help (i, nd) handleConf =
     case nd of
       Source o              -> help (getNode o) handleConf
       Single s i o          -> stmtToProgram s i o handleConf
-      CondITE e i bt bf     -> iteToProgram e bt bf
-      CondWhile e i bt bf   -> whileToProgram e bt bf
+      CondITE e i bt bf c   -> iteToProgram e bt bf c
+      CondWhile e i bt bf c -> whileToProgram e bt bf c
       Confluence (i1, i2) o -> handleConf i o
       Sink i                -> ([], i)
 
@@ -136,24 +151,25 @@ nodeToProgram n (CFG nodes) = help n proceed where
     let (stmt', i) = help (getNode next) handleConf
     in  (stmt:stmt', i)
 
-  whileToProgram :: Expr -> ID -> ID -> ([Stmt], ID)
-  whileToProgram b trid flid =
-    let (tr, _) = help (getNode trid) stop
-        (fl, i)   = help (getNode flid) proceed
+  whileToProgram :: Expr -> In -> ID -> ID -> ([Stmt], ID)
+  whileToProgram b trid flid c =
+    let (tr, _) = help (getNode trid) (stopIf c)
+        (fl, i)   = help (getNode flid) stop
     in (While b (stmtsToStmt tr) : fl, i)
 
-  iteToProgram :: Expr -> ID -> ID -> ([Stmt], ID)
-  iteToProgram b trid flid =
-    let (tr,tcid)  = help (getNode trid) stop -- (branch, true confluence id)
-        (fl,fcid)  = help (getNode flid) stop -- (branch, false confluence id)
-    in if (tcid /= fcid)
-      then error "confluence ids do not match"
-      else
-        let ite = ITE b (stmtsToStmt tr) (stmtsToStmt fl)
-            (stmts, i) = help (getNode tcid) proceed
-        in  (ite:stmts, i)
+  iteToProgram :: Expr -> ID -> ID -> ID -> ([Stmt], ID)
+  iteToProgram b trid flid c =
+    let (tr,tcid)  = help (getNode trid) (stopIf c) -- (branch, true confluence id)
+        (fl,fcid)  = help (getNode flid) (stopIf c) -- (brancid)
+        continue =
+            let ite = ITE b (stmtsToStmt tr) (stmtsToStmt fl)
+                (stmts, i) = help (getNode tcid) proceed
+            in  (ite:stmts, i)
+    in  assert (tcid /= fcid) ("confluence ids do not match. t: " ++ show tcid ++ ", f: " ++ show fcid) continue
+
+  assert b e c = if b then (error e) else c
 
   stmtsToStmt :: [Stmt] -> Stmt
-  stmtsToStmt [] = error "stmtsToStmt on empty list"
+  stmtsToStmt [] = Block [] --error "stmtsToStmt on empty list"
   stmtsToStmt [x] = x
   stmtsToStmt xs  = Block xs
