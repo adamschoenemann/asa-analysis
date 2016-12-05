@@ -6,10 +6,10 @@ import Data.Functor ((<$>))
 import Data.Map (Map)
 import qualified Data.Map.Strict as M
 
-unsafeLookup :: Ord k => k -> Map k v -> v
+unsafeLookup :: (Show k, Ord k) => k -> Map k v -> v
 unsafeLookup k m =
   case M.lookup k m of
-    Nothing -> error "unsafeLookup"
+    Nothing -> error $ "unsafeLookup on key " ++ show k
     Just x  -> x
 
 uncons :: [a] -> Maybe (a, [a])

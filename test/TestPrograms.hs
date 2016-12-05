@@ -75,14 +75,25 @@ in5 =
 
 in6 =
   [string|
-    x := 10;
-    y := x * 2;|]
+    x := a * b;
+    while false do {
+      a := 20 + a;
+      c := c - 1;
+    }
+    z := 20 * 30;
+    a := 20;
+    u := a * b;|]
 
 in7 =
   [string|
     x := 2;
-    if z < x then
-      y := 10;
+    if true then {
+      while false do {
+        output x;
+        skip;
+      }
+      skip;
+    }
     else
       y := 42;
     output y;|]
