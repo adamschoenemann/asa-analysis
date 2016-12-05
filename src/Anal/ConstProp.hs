@@ -4,6 +4,8 @@ module Anal.ConstProp where
 
 import Anal
 import Data.Cmm.AST
+import Data.Cmm.Parser
+import Data.CFG
 import Text.Pretty
 -- import Data.List (intercalate)
 import Data.Map.Strict (Map)
@@ -31,6 +33,7 @@ cpLUP l1 l2    =
 instance Pretty CPLat where
   ppr = show
 
+-- map from var names to CPLat (are they constant?)
 type Env = Map String CPLat
 
 instance Lat Env where
@@ -101,3 +104,62 @@ constProp =
            , initialEnv = cpInitial -- :: [Stmt] -> Set Expr
            , firstPPEnv = M.empty
            }
+
+
+cpLatIntCombine :: (Int -> Int -> Int) -> CPLat -> CPLat -> CPLat
+cpLatIntCombine fn (CPInt a) (CPInt b) = CPInt (fn a b)
+cpLatIntCombine _  (CPBool x) _        = error "type error"
+cpLatIntCombine _  _ (CPBool x)        = error "type error"
+cpLatIntCombine _  a b                 = cpLUP a b
+
+cpLatIntToBoolCombine :: (Int -> Int -> Bool) -> CPLat -> CPLat -> CPLat
+cpLatIntToBoolCombine fn (CPInt a) (CPInt b) = CPBool (fn a b)
+cpLatIntToBoolCombine _  (CPBool x) _        = error "type error"
+cpLatIntToBoolCombine _  _ (CPBool x)        = error "type error"
+cpLatIntToBoolCombine _  a b                 = cpLUP a b
+
+cpLatEqCombine :: CPLat -> CPLat -> CPLat
+cpLatEqCombine (CPInt a) (CPInt b)    = CPBool (a == b)
+cpLatEqCombine (CPBool b) (CPBool a)  = CPBool (a == b)
+cpLatEqCombine (CPInt _) (CPBool _)   = error "type error"
+cpLatEqCombine (CPBool _) (CPInt _)   = error "type error"
+cpLatEqCombine a b                 = cpLUP a b
+
+
+constTransformer :: Transform Env
+constTransformer = Transform { transStmt = stmt, transExpr = expr } where
+  stmt :: Env -> Stmt -> Stmt
+  stmt env st = case st of
+    Skip        -> Skip
+    Ass v e     -> Ass v (expr env e)
+    ITE e bt bf -> error "ite shouldn't happen"
+    Block ss    -> error "block shouldn't happen"
+    While e s   -> error "while should't happen"
+    Output e    -> Output (expr env e)
+  expr :: Env -> Expr -> Expr
+  expr env e = maybe e id (cLatToMaybeExpr . isConst env $ e)
+  cLatToMaybeExpr cl = case cl of
+    CPTop -> Nothing
+    CPBot -> Nothing
+    CPInt  i -> return $ ILit i
+    CPBool b -> return $ BLit b
+  isConst env e = case e of
+    Add e1 e2 -> cpLatIntCombine  (+)  (isConst env e1) (isConst env e2)
+    Sub e1 e2 -> cpLatIntCombine  (-)  (isConst env e1) (isConst env e2)
+    Mul e1 e2 -> cpLatIntCombine  (*)  (isConst env e1) (isConst env e2)
+    Gt  e1 e2 -> cpLatIntToBoolCombine (>)  (isConst env e1) (isConst env e2)
+    Lt  e1 e2 -> cpLatIntToBoolCombine (<)  (isConst env e1) (isConst env e2)
+    Eq  e1 e2 -> cpLatEqCombine (isConst env e1) (isConst env e2)
+    ILit x  -> CPInt x
+    BLit b  -> CPBool b
+    Var n     -> maybe CPTop id $ M.lookup n env
+    Input     -> CPTop
+
+cpAnalysis :: String -> String
+cpAnalysis input = either (error "parse error") (analysis) $ parse program "input" input where
+  analysis prog =
+    let analResult = analyzeProg constProp prog
+        env = M.fromList analResult
+        cfg = progToCfg prog
+        transformed = transformCfg constTransformer cfg env
+    in ppr $ cfgToProgram transformed
