@@ -14,9 +14,16 @@ import Anal.ConstProp
 import TestUtils
 import Text.Pretty
 import Data.Cmm.AST
+import Data.List (permutations)
 
 main :: IO ()
 main = hspec spec
+
+opts :: [Optimization]
+opts = [deadCodeOpt, constPropOpt]
+
+cfgs :: [CFG]
+cfgs = map (\(n,p) -> either (error "parse error") progToCfg $ parse program n p) testPrograms
 
 spec :: Spec
 spec = do
@@ -50,3 +57,18 @@ spec = do
                   (Ass "y" (ILit 0))
             ]
       optimized `shouldBe` expected
+  describe "seqOpts" $ do
+    it "satifises seqOpts [a,b] == runOpts a b" $ do
+      let cases = [seqOpts [a,b] cfg `shouldBe` runOpts a b cfg
+                  | a <- opts, b <- opts, cfg <- cfgs
+                  ]
+      sequence cases
+      return ()
+  describe "optimizeCfg" $ do
+    it "satisifes f opts = f (opts in any permutation)" $ do
+      let cases =
+            [optimizeCfg opts cfg `shouldBe` optimizeCfg opts' cfg
+            | cfg <- cfgs, opts' <- permutations opts
+            ]
+      sequence cases
+      return ()

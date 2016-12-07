@@ -172,3 +172,15 @@ seqOpts :: [Optimization] -> (CFG -> CFG)
 seqOpts [] = id
 seqOpts [opt] = runOpt opt
 seqOpts (o:os) = foldr (\opt fn -> fn . runOpt opt) (runOpt o) os
+
+
+optimizeCfg :: [Optimization] -> CFG -> CFG
+optimizeCfg opts cfg =
+  let fixpoint =
+        fix (\f cfg -> let cfg' = seqOpts opts cfg
+                       in  if cfg' == cfg then cfg' else f cfg'
+        )
+  in  fixpoint cfg
+
+optimizeProgram :: [Optimization] -> [Stmt] -> [Stmt]
+optimizeProgram opts prog = cfgToProgram $ optimizeCfg opts (progToCfg prog)
