@@ -54,7 +54,7 @@ cfgToGviz name (CFG m) =
   in  "digraph " ++ name ++ " {\n" ++ content ++ "}" where
     attrs as = " [" ++ intercalate "," (map (\(a,b) -> a ++ "=\"" ++ b ++ "\"") as) ++ "]"
     label l  = ("label", l)
-    backedge k o = "" -- "\n  " ++ show k ++ " -> " ++ show o ++ " [style=dashed]"
+    backedge k o = "\n  " ++ show k ++ " -> " ++ show o ++ " [style=dashed]"
     gviz k n = case n of
       Source o              -> (show k ++ attrs [("shape", "point")],     show k ++ " -> " ++ show o)
       Single s i o          -> (show k ++ attrs [label (ppr s), ("shape", "box")],
@@ -173,3 +173,18 @@ nodeToProgram n (CFG nodes) = help n proceed where
   stmtsToStmt [] = Block [] --error "stmtsToStmt on empty list"
   stmtsToStmt [x] = x
   stmtsToStmt xs  = Block xs
+
+-- depth first traversal
+dfTraverseCFG :: CFG -> (a -> Node -> a) -> a -> a
+dfTraverseCFG (CFG nodes) fn start =
+  let src = getNode 0
+  in  help S.empty start src where
+    help explored acc (i,node)
+      | i `S.member` explored = acc
+      | otherwise =
+        let acc' = fn acc node
+            explored' = S.insert i explored
+            out = map getNode $ getOutgoing node
+            folder old next = help explored' old next
+        in foldl folder acc' out
+    getNode i = (i,unsafeLookup i nodes)

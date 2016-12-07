@@ -1,7 +1,6 @@
-
 module Anal.DeadCode where
 
-import Data.Set (Set, union, (\\))
+import Data.Set (Set)
 import Data.Map.Strict (Map)
 import qualified Data.Map.Strict as M
 import qualified Data.Set as S
@@ -10,6 +9,15 @@ import Data.CFG
 import Control.Monad.State (runState, get, modify, State)
 import Data.Functor ((<$>))
 import Utils
+import Anal
+
+
+deadCodeOpt :: Optimization
+deadCodeOpt =
+  Opt { nodeTrans  = idNodeTrans :: NodeTrans UnitLat
+      , analysis   = idAnalysis
+      , graphTrans = deadCodeElim
+      }
 
 deadCodeElim :: CFG -> CFG
 deadCodeElim (CFG nodes) =

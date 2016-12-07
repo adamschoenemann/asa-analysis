@@ -7,6 +7,7 @@ import Data.Set (Set, union, (\\))
 import qualified Data.Set as S
 import Anal
 import Data.Cmm.AST
+import Data.CFG
 import Text.Pretty
 import Data.List (intercalate)
 
@@ -55,15 +56,22 @@ availStmtToTFun stmt = case stmt of
   While e _ -> avail e
   Output e  -> avail e
 
-collectExprs :: [Stmt] -> Set Expr
-collectExprs stmts = foldl union S.empty $ map collectExprs' stmts where
-  collectExprs' stmt = case stmt of
-    Skip -> S.empty
-    Ass _ e -> exprs e
-    ITE e t f -> exprs e `union` collectExprs' t `union` collectExprs' f
-    Block stmts' -> collectExprs stmts'
-    While e s -> exprs e `union` collectExprs' s
-    Output e  -> exprs e
+collectExprs :: CFG -> Set Expr
+collectExprs cfg = dfTraverseCFG cfg (\acc n -> acc `union` collectExprs' n) S.empty where
+  collectExprs' node = case node of
+    Source _              -> S.empty
+    Single stmt _ _       ->
+      case stmt of
+        Skip -> S.empty
+        Ass _ e -> exprs e
+        ITE e _ _ -> error "ITE cannot be single"
+        Block stmts' -> error "Block cannot be single"
+        While e _ -> error "While cannot be single"
+        Output e  -> exprs e
+    CondITE e _ _ _ _     -> exprs e
+    CondWhile e _ _ _ _   -> exprs e
+    Confluence _ _        -> S.empty
+    Sink _                -> S.empty
 
 instance Lat (Set Expr) where
   bottom = S.empty -- actually, this is top
@@ -73,6 +81,6 @@ available :: Analysis (Set Expr)
 available =
   Analysis { stmtToTFun = availStmtToTFun -- :: Stmt -> TFun
            , condToTFun = avail
-           , initialEnv = collectExprs -- :: [Stmt] -> Set Expr
+           , initialEnv = collectExprs
            , firstPPEnv = S.empty
            }

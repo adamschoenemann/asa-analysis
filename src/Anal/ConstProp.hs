@@ -91,7 +91,7 @@ evalExpr e env = case e of
     eq   = latOp $ CPBool . either (uncurry (==)) (uncurry (==))
     invalid = error "invalid expression encountered"
 
-cpInitial :: [Stmt] -> Env
+cpInitial :: CFG -> Env
 cpInitial = const bottom
 
 envLUP :: Env -> Env -> Env
@@ -126,8 +126,8 @@ cpLatEqCombine (CPBool _) (CPInt _)   = error "type error"
 cpLatEqCombine a b                 = cpLUP a b
 
 
-constTransformer :: NodeTrans Env
-constTransformer = NodeTrans { transStmt = stmt, transExpr = expr } where
+cpNodeTrans :: NodeTrans Env
+cpNodeTrans = NodeTrans { transStmt = stmt, transExpr = expr } where
   stmt :: Env -> Stmt -> Stmt
   stmt env st = case st of
     Skip        -> Skip
@@ -155,11 +155,18 @@ constTransformer = NodeTrans { transStmt = stmt, transExpr = expr } where
     Var n     -> maybe CPTop id $ M.lookup n env
     Input     -> CPTop
 
+constPropOpt :: Optimization
+constPropOpt =
+  Opt { nodeTrans  = cpNodeTrans
+      , analysis   = constProp
+      , graphTrans = idGraphTrans
+      }
+
 cpAnalysis :: String -> String
 cpAnalysis input = either (error "parse error") (analysis) $ parse program "input" input where
   analysis prog =
     let analResult = analyzeProg constProp prog
-        env = M.fromList analResult
+        env = analResult
         cfg = progToCfg prog
-        transformed = transformCfg constTransformer cfg env
+        transformed = nodeTransCfg cpNodeTrans cfg env
     in ppr $ cfgToProgram transformed

@@ -1,4 +1,5 @@
-{-# LANGUAGE NamedFieldPuns, FlexibleInstances, GADTs, StandaloneDeriving #-}
+{-# LANGUAGE NamedFieldPuns, FlexibleInstances, GADTs, StandaloneDeriving
+           , ExistentialQuantification #-}
 
 module Anal where
 
@@ -19,38 +20,52 @@ class (Ord a, Eq a) => Lat a where
   bottom :: a
   leastUpperBound :: a -> a -> a
 
+data UnitLat = UnitLat deriving (Ord, Eq, Show)
+
+instance Lat UnitLat where
+  bottom = UnitLat
+  leastUpperBound _ _ = UnitLat
+
 -- Transfer Function
 type TFun a = a -> a
 
 -- a function from dependencies to a single lattice element
-type Equation a = [a] -> a
+type Equation a = Map ID a -> a
 
 
 data Analysis a where
   Analysis :: Lat a => { stmtToTFun :: Stmt -> TFun a
                        , condToTFun :: Expr -> TFun a
-                       , initialEnv :: [Stmt] -> a
+                       , initialEnv :: CFG -> a
                        , firstPPEnv :: a -- first program point environment
                        } -> Analysis a
 
-progPsToEqs :: Lat a => Analysis a -> [ProgPoint] -> [Equation a]
-progPsToEqs anal points = map pointToEq points where
+idAnalysis :: Lat a => Analysis a
+idAnalysis =
+  Analysis { stmtToTFun = const id
+           , condToTFun = const id
+           , initialEnv = const bottom
+           , firstPPEnv = bottom
+           }
+
+progPsToEqs :: Lat a => Analysis a -> Map ID ProgPoint -> Map ID (Equation a)
+progPsToEqs anal points = M.map pointToEq points where
   pointToEq (PP dependent (k, node)) prev =
     case node of
       Source o              -> firstPPEnv anal
-      Single stmt i o       -> (stmtToTFun anal $ stmt) (prev !! i)
-      CondITE e i bt bf _   -> (condToTFun anal $ e)    (prev !! i)
-      CondWhile e i bt bf _ -> (condToTFun anal $ e)    (prev !! i)
-      Confluence (i1, i2) o -> leastUpperBound (prev !! i1) (prev !! i2)
-      Sink i                -> prev !! i
+      Single stmt i o       -> (stmtToTFun anal $ stmt) (unsafeLookup i prev)
+      CondITE e i bt bf _   -> (condToTFun anal $ e)    (unsafeLookup i prev)
+      CondWhile e i bt bf _ -> (condToTFun anal $ e)    (unsafeLookup i prev)
+      Confluence (i1, i2) o -> leastUpperBound (unsafeLookup i1 prev) (unsafeLookup i2 prev)
+      Sink i                -> unsafeLookup i prev
 
-type BigT a = [a] -> [a]
+type BigT a = Map ID a -> Map ID a
 
-eqsToBigT :: Lat a => [Equation a] -> BigT a
-eqsToBigT eqs l = map ($ l) eqs
+eqsToBigT :: Lat a => Map ID (Equation a) -> BigT a
+eqsToBigT eqs l = M.map ($ l) eqs
 
 -- solve the recursive equations with the fixpoint theorem!
-solveFix :: Lat a => [a] -> BigT a -> [a]
+solveFix :: Lat a => Map ID a -> BigT a -> Map ID a
 solveFix l bigT =
   let l' = bigT l
   in  if (l == l') then l else solveFix l' bigT
@@ -62,27 +77,29 @@ fix f =
   in  x
 
 -- solveFix without explicit recursion
-solveFix' :: Lat a => [a] -> BigT a -> [a]
+solveFix' :: Lat a => Map ID a -> BigT a -> Map ID a
 solveFix' = fix (\f l bigT ->
                     let l' = bigT l
                     in if (l == l') then l else f l' bigT
                 )
 
-
-analyzeProg :: Lat a => Analysis a -> [Stmt] -> [(ID, a)]
-analyzeProg anal prog = zip (map (fst . node) progps) $ solveFix initial bigT where
-  initialL = (initialEnv anal) prog
-  progps = cfgToProgP $ progToCfg prog
+analyzeCFG :: Lat a => Analysis a -> CFG -> Map ID a
+analyzeCFG anal cfg@(CFG nodes) = solveFix initial bigT where
+  initialL = (initialEnv anal) cfg
+  progps = cfgToProgP $ cfg
   bigT = eqsToBigT . progPsToEqs anal $ progps
-  initial = replicate (length progps) initialL
+  initial = M.map (const initialL) nodes
+
+analyzeProg :: Lat a => Analysis a -> [Stmt] -> Map ID a
+analyzeProg anal prog = analyzeCFG anal (progToCfg prog)
 
 pprintAnalysis :: (Lat a, Pretty a) => Analysis a -> [Stmt] -> IO ()
 pprintAnalysis anal = mapM_ (\(i, r) -> putStrLn $ (show i ++ ": " ++ ppr r)) .
-                        analyzeProg anal
+                        M.toList . analyzeProg anal
 
 printAnalysis :: (Lat a, Show a) => Analysis a -> [Stmt] -> IO ()
 printAnalysis anal = mapM_ (\(i, r) -> putStrLn $ (show i ++ ": " ++ show r)) .
-                        analyzeProg anal
+                        M.toList . analyzeProg anal
 
 
 -- a graph transformation that *preserves* the shape of the graph, but transforms
@@ -92,8 +109,13 @@ data NodeTrans a = NodeTrans
   , transStmt :: a -> Stmt -> Stmt
   }
 
-transformCfg :: Lat a => NodeTrans a -> CFG -> Map ID a -> CFG
-transformCfg transformer (CFG nodes) envMap =
+idNodeTrans :: NodeTrans a
+idNodeTrans = NodeTrans { transExpr = const id , transStmt = const id }
+
+idGraphTrans = id
+
+nodeTransCfg :: Lat a => NodeTrans a -> CFG -> Map ID a -> CFG
+nodeTransCfg transformer (CFG nodes) envMap =
   let (_, newNodes) = runState (helper S.empty (getNode 0)) nodes
   in  CFG newNodes where
     helper explored (k, node)
@@ -115,8 +137,26 @@ transformCfg transformer (CFG nodes) envMap =
     getEnv i = unsafeLookup i envMap
 
 -- an analysis and a way to transform the cfg using that analysis
-data Optimization a =
-  Opt { nodeTrans :: NodeTrans a
-      , analysis    :: Analysis  a
+data Optimization = forall a. Lat a =>
+  Opt { nodeTrans  :: NodeTrans a
+      , analysis   :: Analysis  a
       , graphTrans :: CFG -> CFG
       }
+
+runOpt :: Optimization -> CFG -> CFG
+runOpt (Opt nt anal gt) cfg =
+  let analyzed = analyzeCFG anal cfg
+      nodeTransed = nodeTransCfg nt cfg analyzed
+      graphTransed = gt nodeTransed
+  in graphTransed
+
+-- run optb first and then opt a
+runOpts :: Optimization -> Optimization -> CFG -> CFG
+runOpts opta optb cfg =
+  let cfg'  = runOpt optb cfg
+  in  runOpt opta cfg'
+
+seqOpts :: [Optimization] -> (CFG -> CFG)
+seqOpts [] = id
+seqOpts [opt] = runOpt opt
+seqOpts (o:os) = foldr (\opt fn -> fn . runOpt opt) (runOpt o) os

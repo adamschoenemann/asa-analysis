@@ -113,7 +113,7 @@ testAvailable (nm, progstr) = do
     output $ nm ++ ":"
     -- printAnalysis available p
     output ""
-    (map tupSetToList result) `shouldBe` unsafeLookup nm expected
+    (map tupSetToList $ M.toList result) `shouldBe` unsafeLookup nm expected
 
 tupSetToList :: (a, Set b) -> (a, [b])
 tupSetToList (k,s) = (k, S.toList s)
