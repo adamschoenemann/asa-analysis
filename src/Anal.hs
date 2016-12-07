@@ -16,7 +16,7 @@ import Control.Monad.State (runState, get, modify, State)
 import Debug.Trace
 import Data.Functor ((<$>))
 
-class (Ord a, Eq a) => Lat a where
+class (Ord a, Eq a, Show a) => Lat a where
   bottom :: a
   leastUpperBound :: a -> a -> a
 

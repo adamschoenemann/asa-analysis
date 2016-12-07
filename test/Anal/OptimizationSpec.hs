@@ -19,11 +19,11 @@ import Data.List (permutations)
 main :: IO ()
 main = hspec spec
 
-opts :: [Optimization]
-opts = [deadCodeOpt, constPropOpt]
+opts :: [(String, Optimization)]
+opts = [("Dead Code Elim", deadCodeOpt), ("Const Prop", constPropOpt)]
 
-cfgs :: [CFG]
-cfgs = map (\(n,p) -> either (error "parse error") progToCfg $ parse program n p) testPrograms
+cfgs :: [(String,CFG)]
+cfgs = map (\(n,p) -> (n, either (error "parse error") progToCfg $ parse program n p)) testPrograms
 
 spec :: Spec
 spec = do
@@ -57,18 +57,33 @@ spec = do
                   (Ass "y" (ILit 0))
             ]
       optimized `shouldBe` expected
+  describe "optimizeProg (constProp then deadCode)" $ do
+    it "should work on in12" $ do
+      let ep = parse program ("program in12") in12
+      ep `shouldSatisfy` isRight
+      let Right p = ep
+      let cfg = progToCfg p
+      let optProg = optimizeProgram [deadCodeOpt, constPropOpt] p
+      putPrettyLn optProg
+      -- let expectProg = [Ass "x" (BLit True),Ass "y" (BLit False),Ass "z" (ILit 1764)]
+      -- optProg `shouldBe` expectProg
+
   describe "seqOpts" $ do
-    it "satifises seqOpts [a,b] == runOpts a b" $ do
-      let cases = [seqOpts [a,b] cfg `shouldBe` runOpts a b cfg
-                  | a <- opts, b <- opts, cfg <- cfgs
+    describe "satifises seqOpts [a,b] == runOpts a b" $ do
+      let cases = [it ("works for " ++ n ++ " (" ++ an ++ ", " ++ bn ++ ")") $
+                        seqOpts [a,b] cfg `shouldBe` runOpts a b cfg
+                  | (an, a) <- opts, (bn, b) <- opts, (n,cfg) <- cfgs
                   ]
       sequence cases
       return ()
   describe "optimizeCfg" $ do
-    it "satisifes f opts = f (opts in any permutation)" $ do
-      let cases =
-            [optimizeCfg opts cfg `shouldBe` optimizeCfg opts' cfg
-            | cfg <- cfgs, opts' <- permutations opts
-            ]
-      sequence cases
+    describe "satisifes f opts = f (opts in any permutation)" $ do
+      sequence cases2
       return ()
+
+cases2 :: [SpecWith ()]
+cases2 =
+      [it ("works for " ++ n ++ " " ++ show (map fst opts')) $ do
+        (optimizeCfg (map snd opts) cfg `shouldBe` optimizeCfg (map snd opts') cfg)
+      | (n,cfg) <- cfgs, opts' <- permutations opts
+      ]

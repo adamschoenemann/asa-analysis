@@ -10,6 +10,8 @@ import Text.Pretty
 -- import Data.List (intercalate)
 import Data.Map.Strict (Map)
 import qualified Data.Map.Strict as M
+import Data.Set (Set, union)
+import qualified Data.Set as S
 
 data CPLat
   = CPTop
@@ -95,7 +97,26 @@ cpInitial :: CFG -> Env
 cpInitial = const bottom
 
 envLUP :: Env -> Env -> Env
-envLUP = M.intersectionWith cpLUP
+envLUP = M.unionWith cpLUP
+
+collectVars :: CFG -> Env
+collectVars cfg =
+  let vars = dfTraverseCFG cfg (\acc n -> acc `union` collectVars' n) S.empty
+  in  M.fromList $ map (\v -> (v, CPBot)) $ S.toList vars where
+  collectVars' node = case node of
+    Source _              -> S.empty
+    Single stmt _ _       ->
+      case stmt of
+        Skip -> S.empty
+        Ass v _ -> S.singleton v
+        ITE e _ _ -> error "ITE cannot be single"
+        Block stmts' -> error "Block cannot be single"
+        While e _ -> error "While cannot be single"
+        Output e  -> S.empty
+    CondITE e _ _ _ _     -> S.empty
+    CondWhile e _ _ _ _   -> S.empty
+    Confluence _ _        -> S.empty
+    Sink _                -> S.empty
 
 constProp :: Analysis Env
 constProp =
@@ -123,7 +144,7 @@ cpLatEqCombine (CPInt a) (CPInt b)    = CPBool (a == b)
 cpLatEqCombine (CPBool b) (CPBool a)  = CPBool (a == b)
 cpLatEqCombine (CPInt _) (CPBool _)   = error "type error"
 cpLatEqCombine (CPBool _) (CPInt _)   = error "type error"
-cpLatEqCombine a b                 = cpLUP a b
+cpLatEqCombine a b                    = cpLUP a b
 
 
 cpNodeTrans :: NodeTrans Env

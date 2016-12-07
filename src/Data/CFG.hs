@@ -6,6 +6,7 @@ import Data.Cmm.AST
 import Control.Monad.State
 import qualified Data.Map.Strict as M
 import Data.Map.Strict (Map)
+import Data.Set (Set)
 import qualified Data.Set as S
 import Data.Functor ((<$>))
 import Utils (unsafeLookup)
@@ -54,7 +55,7 @@ cfgToGviz name (CFG m) =
   in  "digraph " ++ name ++ " {\n" ++ content ++ "}" where
     attrs as = " [" ++ intercalate "," (map (\(a,b) -> a ++ "=\"" ++ b ++ "\"") as) ++ "]"
     label l  = ("label", l)
-    backedge k o = "\n  " ++ show k ++ " -> " ++ show o ++ " [style=dashed]"
+    backedge k o = "" -- "\n  " ++ show k ++ " -> " ++ show o ++ " [style=dashed]"
     gviz k n = case n of
       Source o              -> (show k ++ attrs [("shape", "point")],     show k ++ " -> " ++ show o)
       Single s i o          -> (show k ++ attrs [label (ppr s), ("shape", "box")],
@@ -129,41 +130,44 @@ cfgToProgram g@(CFG nodes) =
   in  fst $ nodeToProgram (0,source) g
 
 nodeToProgram :: (ID,Node) -> CFG -> ([Stmt], ID)
-nodeToProgram n (CFG nodes) = help n proceed where
+nodeToProgram n (CFG nodes) = help S.empty n proceed where
   getNode :: ID -> (ID, Node)
   getNode i = (i,unsafeLookup i nodes)
 
-  proceed _ next  = help (getNode next) proceed
-  stop    i next  = ([], i)
-  stopIf j i next = if j == i then ([], i) else help (getNode next) (stopIf j)
+  proceed ex _ next  = help ex (getNode next) proceed
+  stop   _ i next  = ([], i)
+  stopIf j ex i next = if j == i then ([], i) else help ex (getNode next) (stopIf j)
 
-  help :: (ID, Node) -> (Int -> Int -> ([Stmt], ID)) -> ([Stmt], ID)
-  help (i, nd) handleConf =
-    case nd of
-      Source o              -> help (getNode o) handleConf
-      Single s i o          -> stmtToProgram s i o handleConf
-      CondITE e i bt bf c   -> iteToProgram e bt bf c
-      CondWhile e i bt bf c -> whileToProgram e bt bf c
-      Confluence (i1, i2) o -> handleConf i o
-      Sink i                -> ([], i)
+  help :: Set ID -> (ID, Node) -> (Set ID -> Int -> Int -> ([Stmt], ID)) -> ([Stmt], ID)
+  help ex (i, nd) handleConf
+    | i `S.member` ex = ([], i)
+    | otherwise =
+        let ex' = S.insert i ex
+        in case nd of
+          Source o              -> help ex' (getNode o) handleConf
+          Single s i o          -> stmtToProgram ex' s i o handleConf
+          CondITE e i bt bf c   -> iteToProgram ex' e bt bf c
+          CondWhile e i bt bf c -> whileToProgram ex' e bt bf c
+          Confluence (i1, i2) o -> handleConf ex' i o
+          Sink i                -> ([], i)
 
-  stmtToProgram stmt i next handleConf =
-    let (stmt', i) = help (getNode next) handleConf
+  stmtToProgram ex stmt i next handleConf =
+    let (stmt', i) = help ex (getNode next) handleConf
     in  (stmt:stmt', i)
 
-  whileToProgram :: Expr -> In -> ID -> ID -> ([Stmt], ID)
-  whileToProgram b trid flid c =
-    let (tr, _) = help (getNode trid) (stopIf c)
-        (fl, i)   = help (getNode flid) stop
+  whileToProgram :: Set ID -> Expr -> In -> ID -> ID -> ([Stmt], ID)
+  whileToProgram ex b trid flid c =
+    let (tr, _) = help ex (getNode trid) (stopIf c)
+        (fl, i)   = help ex (getNode flid) stop
     in (While b (stmtsToStmt tr) : fl, i)
 
-  iteToProgram :: Expr -> ID -> ID -> ID -> ([Stmt], ID)
-  iteToProgram b trid flid c =
-    let (tr,tcid)  = help (getNode trid) (stopIf c) -- (branch, true confluence id)
-        (fl,fcid)  = help (getNode flid) (stopIf c) -- (brancid)
+  iteToProgram :: Set ID -> Expr -> ID -> ID -> ID -> ([Stmt], ID)
+  iteToProgram ex b trid flid c =
+    let (tr,tcid)  = help ex (getNode trid) (stopIf c) -- (branch, true confluence id)
+        (fl,fcid)  = help ex (getNode flid) (stopIf c) -- (brancid)
         continue =
             let ite = ITE b (stmtsToStmt tr) (stmtsToStmt fl)
-                (stmts, i) = help (getNode tcid) proceed
+                (stmts, i) = help ex (getNode tcid) proceed
             in  (ite:stmts, i)
     in  assert (tcid /= fcid) ("confluence ids do not match. t: " ++ show tcid ++ ", f: " ++ show fcid) continue
 
