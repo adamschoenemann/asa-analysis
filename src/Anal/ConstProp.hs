@@ -126,8 +126,8 @@ cpLatEqCombine (CPBool _) (CPInt _)   = error "type error"
 cpLatEqCombine a b                 = cpLUP a b
 
 
-constTransformer :: Transform Env
-constTransformer = Transform { transStmt = stmt, transExpr = expr } where
+constTransformer :: NodeTrans Env
+constTransformer = NodeTrans { transStmt = stmt, transExpr = expr } where
   stmt :: Env -> Stmt -> Stmt
   stmt env st = case st of
     Skip        -> Skip

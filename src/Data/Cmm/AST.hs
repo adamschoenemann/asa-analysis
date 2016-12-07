@@ -57,7 +57,7 @@ ppStmt n stmt =
                    ++ (trimBlock s1 $ ppStmt (incBlock s1 n) s1) ++ "\n" ++ indent n ++ "else" ++ wsBlock s2
                    ++ (trimBlock s2 $ ppStmt (incBlock s2 n) s2)
     Block stmts -> indent n ++ "{\n" ++ unlines (map (ppStmt (n+1)) stmts) ++ indent n ++ "}"
-    While e s  ->    indent n ++ "while " ++ ppExpr e ++ " do "
+    While e s  ->    indent n ++ "while " ++ ppExpr e ++ " do" ++ wsBlock s
                   ++ (trimBlock s $ ppStmt (incBlock s n) s)
     Output e   -> indent n ++ "output " ++ ppExpr e ++ ";"
   where

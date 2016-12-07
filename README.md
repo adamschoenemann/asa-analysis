@@ -3,17 +3,20 @@
 For Automated Software Analysis at ITU 2016.
 
 ## TODO:
-- Afterwards, dead-code elimination
 - Find a way to make a source-to-source mapping from the result of the analyses
     - I.e. actually use the result of the analyses to perform an optimization
-      on the source code (AST)
+      on the source code (AST) ✓
     - Use the result of an analysis to modify control-flow graph
-    - Generate new source from the control-flow graph
+- Allow for backwards analyses
+- Implement a form of backwards analyses
 - Create some proper testing
     - halway done
+- Sequence multiple analyses into a "big" analysis
 
 ## DONE:
+- Generate new source from the control-flow graph ✓
 - Implement constrant-propagation ✓
+- Afterwards, dead-code elimination ✓
 - Abstract concrete analysis away, to get general framework ✓
 - Present program points, and the result of analyses in a better way ✓
     - To check if its correct (verification) ✓

@@ -12,6 +12,7 @@ import qualified Data.Map as M
 import Data.Set (Set)
 import qualified Data.Set as S
 import Utils (unsafeLookup)
+import TestUtils
 
 exp1 :: [(Int, [Expr])]
 exp1 = [
@@ -71,17 +72,26 @@ exp4 = [
   ]
 
 exp5 :: [(Int, [Expr])]
-exp5 = [
-     (0, [])
-    ,(1, [])
-    ,(2, [])
-    ,(3, [])
-    ,(4, [Mul (ILit 2) (ILit 20)])
-    ,(5, [Mul (ILit 2) (ILit 20)])
-    ,(6, [Mul (ILit 2) (ILit 20)])
-    ,(7, [Mul (ILit 2) (ILit 20)])
-    ,(8, [Mul (ILit 2) (ILit 20)])
-    ,(9, [Mul (ILit 2) (ILit 20)])
+exp5 =
+  [ (0,[])
+  , (1,[])
+  , (2,[])
+  , (3,[Mul (ILit 2) (ILit 20)])
+  , (4,[Mul (ILit 2) (ILit 20), Lt (Var "x") (ILit 41)])
+  , (5,[Mul (ILit 2) (ILit 20), Lt (Var "x") (ILit 41)])
+  , (6,[Mul (ILit 2) (ILit 20), Lt (Var "x") (ILit 41)])
+  , (7,[Mul (ILit 2) (ILit 20), Lt (Var "x") (ILit 41)])
+  , (8,[Mul (ILit 2) (ILit 20), Gt (Var "i") (ILit 0), Lt (Var "x") (ILit 41)])
+  , (9,[Mul (ILit 2) (ILit 20), Gt (Var "i") (ILit 0), Lt (Var "x") (ILit 41)])
+  , (10,[Mul (ILit 2) (ILit 20), Gt (Var "i") (ILit 0), Lt (Var "x") (ILit 41)])
+  , (11,[Mul (ILit 2) (ILit 20), Lt (Var "x") (ILit 41)])
+  , (12,[Mul (ILit 2) (ILit 20), Lt (Var "x") (ILit 41)])
+  , (13,[Mul (ILit 2) (ILit 20), Lt (Var "x") (ILit 41)])
+  , (14,[Mul (ILit 2) (ILit 20), Lt (Var "x") (ILit 41)])
+  , (15,[Mul (ILit 2) (ILit 20), Lt (Var "x") (ILit 41)])
+  , (16,[Mul (ILit 2) (ILit 20), Lt (Var "x") (ILit 41)])
+  , (17,[Mul (ILit 2) (ILit 20), Lt (Var "x") (ILit 41)])
+  , (18,[Mul (ILit 2) (ILit 20), Lt (Var "x") (ILit 41)])
   ]
 
 expected :: Map String [(Int, [Expr])]
@@ -100,9 +110,9 @@ testAvailable (nm, progstr) = do
     ep `shouldSatisfy` isRight
     let Right p = ep
     let result = analyzeProg available p
-    putStrLn $ nm ++ ":"
-    printAnalysis available p
-    putStrLn ""
+    output $ nm ++ ":"
+    -- printAnalysis available p
+    output ""
     (map tupSetToList result) `shouldBe` unsafeLookup nm expected
 
 tupSetToList :: (a, Set b) -> (a, [b])
