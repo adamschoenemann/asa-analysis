@@ -65,3 +65,5 @@ brackets x = between (char '{' <* spaces) (char '}') (x <* spaces)
 ident :: Parser String
 ident  = (:) <$> letter <*> many alphaNum
 
+unsafeParse :: String -> [Stmt]
+unsafeParse p = either (error . show) id $ parse program "unsafe" p

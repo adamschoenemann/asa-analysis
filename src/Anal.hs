@@ -1,7 +1,10 @@
 {-# LANGUAGE NamedFieldPuns, FlexibleInstances, GADTs, StandaloneDeriving
            , ExistentialQuantification #-}
 
-module Anal where
+module Anal
+  ( module Anal
+  , module Data.Lat
+  ) where
 
 import Data.Set (Set, union, (\\))
 import Data.Map.Strict (Map)
@@ -15,16 +18,8 @@ import Utils
 import Control.Monad.State (runState, get, modify, State)
 import Debug.Trace
 import Data.Functor ((<$>))
+import Data.Lat
 
-class (Ord a, Eq a, Show a) => Lat a where
-  bottom :: a
-  leastUpperBound :: a -> a -> a
-
-data UnitLat = UnitLat deriving (Ord, Eq, Show)
-
-instance Lat UnitLat where
-  bottom = UnitLat
-  leastUpperBound _ _ = UnitLat
 
 -- Transfer Function
 type TFun a = a -> a

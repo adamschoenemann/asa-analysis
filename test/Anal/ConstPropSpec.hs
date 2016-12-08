@@ -27,8 +27,8 @@ main = hspec spec
 
 spec :: Spec
 spec = do
-  describe "analysis" $ do
-    mapM_ testAnalysis $ testPrograms
+  -- describe "analysis" $ do
+  --   mapM_ testAnalysis $ testPrograms
   describe "optimization" $ do
     mapM_ testOptimization $ testPrograms
 
@@ -41,16 +41,16 @@ testOptimization (nm, progstr) =
     True `shouldBe` True
     return ()
 
-testAnalysis (nm, progstr) = do
-  it ("should work for " ++ nm) $ do
-    let ep = parse program ("program" ++ nm) progstr
-    ep `shouldSatisfy` isRight
-    let Right p = ep
-    let result = analyzeProg constProp p
-    putStrLn $ nm ++ ":"
-    pprintAnalysis constProp p
-    return ()
-    -- (map tupSetToList $ M.toList result) `shouldBe` unsafeLookup nm expected
+-- testAnalysis (nm, progstr) = do
+--   it ("should work for " ++ nm) $ do
+--     let ep = parse program ("program" ++ nm) progstr
+--     ep `shouldSatisfy` isRight
+--     let Right p = ep
+--     let result = analyzeProg constProp p
+--     -- putStrLn $ nm ++ ":"
+--     -- pprintAnalysis constProp p
+--     return ()
+--     -- (map tupSetToList $ M.toList result) `shouldBe` unsafeLookup nm expected
 
 tupSetToList :: (a, Set b) -> (a, [b])
 tupSetToList (k,s) = (k, S.toList s)

@@ -78,11 +78,7 @@ ppStmts n = unlines . map (ppStmt n)
 instance Pretty [Stmt] where
   ppr = ppStmts 0
 
--- Composition to list of statements
--- comp2list :: Stmt -> [Stmt]
--- comp2list (Comp s1 c2@(Comp s2 s3)) = s1 : comp2list c2
--- comp2list (Comp s1 s2)             = [s1,s2]
--- comp2list (Comp s1 c2@(Comp s2 s3)) = s1 : comp2list c2
--- comp2list (Comp c1@(Comp s1 s2) s3) = comp2list c1 ++ [s3]
--- comp2list (Comp s1 s2) = [s1,s2]
--- comp2list _ = error "only flatten compositions"
+stmtsToStmt :: [Stmt] -> Stmt
+stmtsToStmt [] = Block [] --error "stmtsToStmt on empty list"
+stmtsToStmt [x] = x
+stmtsToStmt xs  = Block xs

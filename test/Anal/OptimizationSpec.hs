@@ -64,9 +64,9 @@ spec = do
       let Right p = ep
       let cfg = progToCfg p
       let optProg = optimizeProgram [deadCodeOpt, constPropOpt] p
-      putPrettyLn optProg
-      -- let expectProg = [Ass "x" (BLit True),Ass "y" (BLit False),Ass "z" (ILit 1764)]
-      -- optProg `shouldBe` expectProg
+      -- putPrettyLn optProg
+      let expectProg = [Ass "a" (ILit 59),Ass "b" (ILit 68),Ass "c" (ILit 0),Output (ILit 59)]
+      optProg `shouldBe` expectProg
 
   describe "seqOpts" $ do
     describe "satifises seqOpts [a,b] == runOpts a b" $ do

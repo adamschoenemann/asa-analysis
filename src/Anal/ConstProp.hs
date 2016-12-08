@@ -94,10 +94,10 @@ evalExpr e env = case e of
     invalid = error "invalid expression encountered"
 
 cpInitial :: CFG -> Env
-cpInitial = const bottom
+cpInitial = collectVars
 
 envLUP :: Env -> Env -> Env
-envLUP = M.unionWith cpLUP
+envLUP = M.intersectionWith cpLUP
 
 collectVars :: CFG -> Env
 collectVars cfg =

@@ -173,10 +173,6 @@ nodeToProgram n (CFG nodes) = help S.empty n proceed where
 
   assert b e c = if b then (error e) else c
 
-  stmtsToStmt :: [Stmt] -> Stmt
-  stmtsToStmt [] = Block [] --error "stmtsToStmt on empty list"
-  stmtsToStmt [x] = x
-  stmtsToStmt xs  = Block xs
 
 -- depth first traversal
 dfTraverseCFG :: CFG -> (a -> Node -> a) -> a -> a
@@ -191,4 +187,44 @@ dfTraverseCFG (CFG nodes) fn start =
             out = map getNode $ getOutgoing node
             folder old next = help explored' old next
         in foldl folder acc' out
+    getNode i = (i,unsafeLookup i nodes)
+
+
+data DFAlg a =
+  DFAlg { dfWhile  :: ID -> Expr -> a -> a -> a
+        , dfITE    :: ID -> Expr -> a -> a -> a -> a
+        , dfSingle :: ID -> Stmt -> a -> a
+        }
+
+dfFoldCFGAlg :: DFAlg a -> CFG -> a -> a
+dfFoldCFGAlg (DFAlg while ite single) (CFG nodes) start =
+  let src = getNode 0
+  in  help S.empty start src proceed where
+
+    help explored acc (i,node) confluence
+      | i `S.member` explored = acc
+      | otherwise =
+        let explored' = S.insert i explored
+            -- out = map getNode $ getOutgoing node
+            -- folder old next = help explored' old next
+        in case node of
+          Source o              -> help explored' acc (getNode o) confluence
+          Single s _ o          -> single i s (help explored' acc (getNode o) confluence)
+          CondITE e _ bt bf c   ->
+            let trb  = help explored' acc (getNode bt) (stopAt c)
+                flb  = help explored' acc (getNode bf) (stopAt c)
+                (_,Confluence _ o) = getNode c
+            in  ite i e trb flb (help explored' acc (getNode o) proceed)
+          CondWhile e _ bt bf c ->
+            let trb = help explored' acc (getNode bt) (stopAt c)
+                flb = help explored' acc (getNode bf) confluence
+            in  while i e trb flb
+          Confluence (i1, i2) o -> confluence explored' i o acc
+          Sink _                -> acc
+
+    proceed ex  i' n acc  = help ex acc (getNode n) proceed
+    stopAt j ex i' n acc
+      | j == i' = acc
+      | otherwise = help ex acc (getNode n) (stopAt j)
+
     getNode i = (i,unsafeLookup i nodes)
