@@ -124,7 +124,7 @@ constProp =
   Analysis { stmtToTFun = cpStmtToTFun -- :: Stmt -> TFun
            , condToTFun = \e -> id
            , initialEnv = cpInitial -- :: [Stmt] -> Set Expr
-           , firstPPEnv = M.empty
+           , getDeps = forward (M.empty)
            }
 
 

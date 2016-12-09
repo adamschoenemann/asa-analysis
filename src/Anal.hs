@@ -1,5 +1,4 @@
-{-# LANGUAGE NamedFieldPuns, FlexibleInstances, GADTs, StandaloneDeriving
-           , ExistentialQuantification #-}
+{-# LANGUAGE ExistentialQuantification #-}
 
 module Anal
   ( module Anal
@@ -13,7 +12,6 @@ import qualified Data.Set as S
 import Data.Cmm.AST
 import Data.Cmm.Annotated
 import Data.CFG
-import Data.ProgPoint
 import Text.Pretty
 import Utils
 import Control.Monad.State (runState, get, modify, State)
@@ -28,44 +26,54 @@ type TFun a = a -> a
 -- a function from dependencies to a single lattice element
 type Equation a = Map ID a -> a
 
+forward :: Lat a => a -> Node -> Map ID a -> a
+forward srcEnv node envs =
+  case node of
+      Source o              -> srcEnv
+      Single stmt i o       -> getEnv i
+      CondITE e i bt bf _   -> getEnv i
+      CondWhile e i bt bf _ -> getEnv i
+      Confluence (i1, i2) o -> leastUpperBound (getEnv i1) (getEnv i2)
+      Sink i                -> getEnv i
+  where getEnv k = unsafeLookup k envs
 
-data Analysis a where
-  Analysis :: Lat a => { stmtToTFun :: Stmt -> TFun a
-                       , condToTFun :: Expr -> TFun a
-                       , initialEnv :: CFG -> a
-                       , firstPPEnv :: a -- first program point environment
-                       } -> Analysis a
+backwards :: Lat a => a -> Node -> Map ID a -> a
+backwards sinkEnv node envs =
+  case node of
+      Source o              -> getEnv o
+      Single stmt i o       -> getEnv o
+      CondITE e i bt bf _   -> leastUpperBound (getEnv bt) (getEnv bf)
+      CondWhile e i bt bf _ -> leastUpperBound (getEnv bt) (getEnv bf)
+      Confluence (i1, i2) o -> getEnv o
+      Sink i                -> sinkEnv
+  where getEnv k = unsafeLookup k envs
+
+data Analysis a
+  = Analysis { stmtToTFun :: Stmt -> TFun a
+             , condToTFun :: Expr -> TFun a
+             , initialEnv :: CFG -> a
+             , getDeps    :: Node -> Map ID a -> a
+             }
 
 idAnalysis :: Lat a => Analysis a
 idAnalysis =
   Analysis { stmtToTFun = const id
            , condToTFun = const id
            , initialEnv = const bottom
-           , firstPPEnv = bottom
+           , getDeps    = forward bottom
            }
 
-cfgToProgP :: CFG -> Map ID ProgPoint
-cfgToProgP (CFG nodes) = M.mapWithKey nodeToPP $ nodes where
-  nodeToPP k node = case node of
-      Source o              -> PP empty    (k,node)
-      Single stmt i o       -> PP (pure i) (k,node)
-      CondITE e i bt bf _   -> PP (pure i) (k,node)
-      CondWhile e i bt bf _ -> PP (pure i) (k,node)
-      Confluence (i1, i2) o -> PP (S.fromList [i1, i2]) (k,node)
-      Sink i                -> PP (pure i) (k,node)
-    where pure x = S.singleton x
-          empty  = S.empty
-
-progPsToEqs :: Lat a => Analysis a -> Map ID ProgPoint -> Map ID (Equation a)
-progPsToEqs anal points = M.map pointToEq points where
-  pointToEq (PP dependent (k, node)) prev =
-    case node of
-      Source o              -> firstPPEnv anal
-      Single stmt i o       -> (stmtToTFun anal $ stmt) (unsafeLookup i prev)
-      CondITE e i bt bf _   -> (condToTFun anal $ e)    (unsafeLookup i prev)
-      CondWhile e i bt bf _ -> (condToTFun anal $ e)    (unsafeLookup i prev)
-      Confluence (i1, i2) o -> leastUpperBound (unsafeLookup i1 prev) (unsafeLookup i2 prev)
-      Sink i                -> unsafeLookup i prev
+cfgToEqs :: Lat a => Analysis a -> CFG -> Map ID (Equation a)
+cfgToEqs anal (CFG nodes) = M.mapWithKey nodeToEq nodes where
+  nodeToEq k node prev =
+    let dep = (getDeps anal) node prev
+    in case node of
+      Source o              -> dep
+      Single stmt i o       -> (stmtToTFun anal $ stmt) dep
+      CondITE e i bt bf _   -> (condToTFun anal $ e)    dep
+      CondWhile e i bt bf _ -> (condToTFun anal $ e)    dep
+      Confluence (i1, i2) o -> dep
+      Sink i                -> dep
 
 type BigT a = Map ID a -> Map ID a
 
@@ -94,8 +102,8 @@ solveFix' = fix (\f l bigT ->
 analyzeCFG :: Lat a => Analysis a -> CFG -> Map ID a
 analyzeCFG anal cfg@(CFG nodes) = solveFix initial bigT where
   initialL = (initialEnv anal) cfg
-  progps = cfgToProgP $ cfg
-  bigT = eqsToBigT . progPsToEqs anal $ progps
+  eqs = cfgToEqs anal cfg
+  bigT = eqsToBigT eqs
   initial = M.map (const initialL) nodes
 
 analyzeProg :: Lat a => Analysis a -> [Stmt] -> Map ID a

@@ -18,7 +18,7 @@ cabal-version:       >=1.10
 library
   exposed-modules:     Avail, Data.Graph, Data.Cmm.Parser, Data.Cmm.AST
                      , Text.Pretty, Anal.Available, Anal.ConstProp
-                     , Data.CFG, Data.ProgPoint, Anal.DeadCode, Data.Lat
+                     , Data.CFG, Anal.DeadCode, Data.Lat
                      , Data.Cmm.Annotated, Anal.QuasiQuoter
   -- other-modules:
   -- other-extensions:

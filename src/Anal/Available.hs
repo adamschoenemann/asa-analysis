@@ -82,5 +82,5 @@ available =
   Analysis { stmtToTFun = availStmtToTFun -- :: Stmt -> TFun
            , condToTFun = avail
            , initialEnv = collectExprs
-           , firstPPEnv = S.empty
+           , getDeps = forward S.empty
            }

@@ -5,7 +5,7 @@ module TestPrograms where
 import NeatInterpolation
 import Text.Regex
 
-in1, in2, in3, in4, in5, in6, in7, in8, in9, in10, in11, in12 :: String
+in1, in2, in3, in4, in5, in6, in7, in8, in9, in10, in11, in12, in13 :: String
 
 in1 =
   [string|
@@ -159,11 +159,30 @@ in12 =
     output c + a;
   |]
 
+in13 =
+  [string|
+    x := input;
+    while x > 1 do {
+      y := x * 2;
+      if y > 3 then
+        x := x - y;
+      else
+        skip;
+      z := x - 4;
+      if z > 0 then
+        x := x * 2;
+      else
+        skip;
+      z := z - 1;
+    }
+    output x;
+  |]
+
 testPrograms :: [(String, String)]
 testPrograms =
   let progs =  [ ("in1", in1), ("in2", in2), ("in3", in3), ("in4", in4), ("in5", in5)
                , ("in6", in6), ("in7", in7), ("in8", in8), ("in9", in9), ("in10", in10)
-               , ("in11", in11), ("in12", in12)
+               , ("in11", in11), ("in12", in12), ("in13", in13)
                ]
       rgx = mkRegex "(\r\n)|\r|\n"
   in  map (\(n,p) -> (n, subRegex rgx p "\n")) progs

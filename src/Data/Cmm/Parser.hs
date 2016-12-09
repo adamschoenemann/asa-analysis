@@ -44,7 +44,7 @@ expr = equality
     comparison = intexpr    `chainl1` intop
     intexpr    = term       `chainl1` termop
     term       = factor     `chainl1` factop
-    factor     = (parens expr) <* spaces <|> int <|> bool <|> var <|> input
+    factor     = (parens expr) <* spaces <|> (try input) <|> int <|> bool <|> var
     cmpop  =  const Eq  <$> string "==" <* spaces
     intop  =  const Gt  <$> char   '>'  <* spaces
           <|> const Lt  <$> char   '<'  <* spaces
