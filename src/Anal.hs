@@ -11,6 +11,7 @@ import Data.Map.Strict (Map)
 import qualified Data.Map.Strict as M
 import qualified Data.Set as S
 import Data.Cmm.AST
+import Data.Cmm.Annotated
 import Data.CFG
 import Data.ProgPoint
 import Text.Pretty
@@ -145,37 +146,37 @@ nodeTransCfg transformer (CFG nodes) envMap =
 
 -- an analysis and a way to transform the cfg using that analysis
 data Optimization = forall a. Lat a =>
-  Opt { nodeTrans  :: NodeTrans a
-      , analysis   :: Analysis  a
-      , graphTrans :: CFG -> CFG
+  Opt { optTransform  :: [Annotated a] -> [Stmt]
+      , optAnalysis   :: Analysis  a
       }
 
-runOpt :: Optimization -> CFG -> CFG
-runOpt (Opt nt anal gt) cfg =
-  let analyzed = analyzeCFG anal cfg
-      nodeTransed = nodeTransCfg nt cfg analyzed
-      graphTransed = gt nodeTransed
-  in graphTransed
+runOpt :: Optimization -> [Stmt] -> [Stmt]
+runOpt (Opt trans anal) prog =
+  let cfg      = progToCfg prog
+      analyzed = analyzeCFG anal cfg
+      annotated = cfgToAnnotated analyzed cfg
+      optimized = trans annotated
+  in optimized
 
 -- run optb first and then opt a
-runOpts :: Optimization -> Optimization -> CFG -> CFG
-runOpts opta optb cfg =
-  let cfg'  = runOpt optb cfg
-  in  runOpt opta cfg'
+runOpts :: Optimization -> Optimization -> [Stmt] -> [Stmt]
+runOpts opta optb prog =
+  let prog'  = runOpt optb prog
+  in  runOpt opta prog'
 
-seqOpts :: [Optimization] -> (CFG -> CFG)
+seqOpts :: [Optimization] -> ([Stmt] -> [Stmt])
 seqOpts [] = id
 seqOpts [opt] = runOpt opt
 seqOpts (o:os) = foldr (\opt fn -> fn . runOpt opt) (runOpt o) os
 
 
-optimizeCfg :: [Optimization] -> CFG -> CFG
-optimizeCfg opts cfg =
+optimizeProg :: [Optimization] -> [Stmt] -> [Stmt]
+optimizeProg opts prog =
   let fixpoint =
-        fix (\f cfg -> let cfg' = seqOpts opts cfg
-                       in  if cfg' == cfg then cfg' else f cfg'
+        fix (\f prog -> let prog' = seqOpts opts prog
+                       in  if prog' == prog then prog' else f prog'
         )
-  in  fixpoint cfg
+  in  fixpoint prog
 
-optimizeProgram :: [Optimization] -> [Stmt] -> [Stmt]
-optimizeProgram opts prog = cfgToProgram $ optimizeCfg opts (progToCfg prog)
+-- optimizeProgram :: [Optimization] -> [Stmt] -> [Stmt]
+-- optimizeProgram opts prog = cfgToProgram $ optimizeCfg opts (progToCfg prog)

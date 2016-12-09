@@ -37,7 +37,7 @@ testOptimization (nm, progstr) =
     let ep = parse program ("program" ++ nm) progstr
     ep `shouldSatisfy` isRight
     let Right p = ep
-    (evaluate . force) $ optimizeCfg [constPropOpt, deadCodeOpt] (progToCfg p)
+    (evaluate . force) $ optimizeProg [constPropOpt, deadCodeOpt] p
     True `shouldBe` True
     return ()
 

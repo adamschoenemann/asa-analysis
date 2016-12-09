@@ -22,8 +22,8 @@ main = hspec spec
 opts :: [(String, Optimization)]
 opts = [("Dead Code Elim", deadCodeOpt), ("Const Prop", constPropOpt)]
 
-cfgs :: [(String,CFG)]
-cfgs = map (\(n,p) -> (n, either (error "parse error") progToCfg $ parse program n p)) testPrograms
+progs :: [(String,[Stmt])]
+progs = map (\(n,p) -> (n, either (error "parse error") id $ parse program n p)) testPrograms
 
 spec :: Spec
 spec = do
@@ -32,9 +32,7 @@ spec = do
       let ep = parse program ("program in3") in3
       ep `shouldSatisfy` isRight
       let Right p = ep
-      let cfg = progToCfg p
-      let optCFG = runOpts deadCodeOpt constPropOpt cfg
-      let optProg = cfgToProgram $ optCFG
+      let optProg = runOpts deadCodeOpt constPropOpt p
       let expectProg = [Ass "x" (BLit True),Ass "y" (BLit False),Ass "z" (ILit 1764)]
       optProg `shouldBe` expectProg
 
@@ -42,11 +40,10 @@ spec = do
       let ep = parse program ("program in3") in3
       ep `shouldSatisfy` isRight
       let Right p = ep
-      let cfg = progToCfg p
       -- dead-code will only catch constant literals and remove one branch
       -- and const-prop will leave use with more constants, so an extra run
       -- of dead-code would eliminate the last branch
-      let optimized = cfgToProgram $ runOpts constPropOpt deadCodeOpt cfg
+      let optimized = runOpts constPropOpt deadCodeOpt p
       let expected =
             [ Ass "x" (BLit True)
             , ITE (BLit True)
@@ -62,8 +59,7 @@ spec = do
       let ep = parse program ("program in12") in12
       ep `shouldSatisfy` isRight
       let Right p = ep
-      let cfg = progToCfg p
-      let optProg = optimizeProgram [deadCodeOpt, constPropOpt] p
+      let optProg = optimizeProg [deadCodeOpt, constPropOpt] p
       -- putPrettyLn optProg
       let expectProg = [Ass "a" (ILit 59),Ass "b" (ILit 68),Ass "c" (ILit 0),Output (ILit 59)]
       optProg `shouldBe` expectProg
@@ -71,19 +67,19 @@ spec = do
   describe "seqOpts" $ do
     describe "satifises seqOpts [a,b] == runOpts a b" $ do
       let cases = [it ("works for " ++ n ++ " (" ++ an ++ ", " ++ bn ++ ")") $
-                        seqOpts [a,b] cfg `shouldBe` runOpts a b cfg
-                  | (an, a) <- opts, (bn, b) <- opts, (n,cfg) <- cfgs
+                        seqOpts [a,b] prog `shouldBe` runOpts a b prog
+                  | (an, a) <- opts, (bn, b) <- opts, (n,prog) <- progs
                   ]
       sequence cases
       return ()
-  describe "optimizeCfg" $ do
-    describe "satisifes f opts = f (opts in any permutation)" $ do
-      sequence cases2
-      return ()
+--   describe "optimizeCfg" $ do
+--     describe "satisifes f opts = f (opts in any permutation)" $ do
+--       sequence cases2
+--       return ()
 
-cases2 :: [SpecWith ()]
-cases2 =
-      [it ("works for " ++ n ++ " " ++ show (map fst opts')) $ do
-        (optimizeCfg (map snd opts) cfg `shouldBe` optimizeCfg (map snd opts') cfg)
-      | (n,cfg) <- cfgs, opts' <- permutations opts
-      ]
+-- cases2 :: [SpecWith ()]
+-- cases2 =
+--       [it ("works for " ++ n ++ " " ++ show (map fst opts')) $ do
+--         (optimizeCfg (map snd opts) cfg `shouldBe` optimizeCfg (map snd opts') cfg)
+--       | (n,cfg) <- progs, opts' <- permutations opts
+--       ]

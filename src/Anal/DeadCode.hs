@@ -10,8 +10,10 @@ import Control.Monad.State (runState, get, modify, State)
 import Data.Functor ((<$>))
 import Utils
 import Anal
-import Data.Maybe (catMaybes)
+import Data.Cmm.Annotated
 
+deadCodeTransAnn :: [Annotated a] -> [Stmt]
+deadCodeTransAnn = deadCodeTrans . annotatedToProg
 
 deadCodeTrans :: [Stmt] -> [Stmt]
 deadCodeTrans ss = foldr dct [] ss where
@@ -24,7 +26,7 @@ deadCodeTrans ss = foldr dct [] ss where
           BLit True  -> dct bt acc
           BLit False -> dct bf acc
           _          -> ITE e (s2s $ dct bt []) (s2s $ dct bf []) : acc
-      Block ss'   -> (s2s $ deadCodeTrans ss') : acc
+      Block ss'   -> deadCodeTrans ss' ++ acc
       While e s   ->
         case e of
           BLit True  -> While e s : acc
@@ -35,9 +37,8 @@ deadCodeTrans ss = foldr dct [] ss where
 
 deadCodeOpt :: Optimization
 deadCodeOpt =
-  Opt { nodeTrans  = idNodeTrans :: NodeTrans UnitLat
-      , analysis   = idAnalysis
-      , graphTrans = deadCodeElim
+  Opt { optTransform  = deadCodeTransAnn :: [Annotated UnitLat] -> [Stmt]
+      , optAnalysis   = idAnalysis
       }
 
 deadCodeElim :: CFG -> CFG
@@ -56,10 +57,11 @@ deadCodeElim (CFG nodes) =
             -- remove false branch and never stop (until Sink of course).
             -- We have an infinite loop!
             removeBranch explored' k 0 =<< (getNode bf)
-            modify (M.delete k) -- delete the while condition
-            modify (M.adjust (setOut bt k) i) -- point the previous to the true branch
-            modify (M.adjust (setIn i k)  bt) -- point the true branch's in to previous
+            -- modify (M.delete k) -- delete the while condition
+            -- modify (M.adjust (setOut bt k) i) -- point the previous to the true branch
+            -- modify (M.adjust (setIn i k)  bt) -- point the true branch's in to previous
             helper explored' =<< (getNode bt)
+            modify (M.insert bf (Sink i))
           CondWhile (BLit False) i bt bf c -> do
              removeBranch explored' k c =<< (getNode bt)
              -- removeBranch has now set this conditional node's input to be

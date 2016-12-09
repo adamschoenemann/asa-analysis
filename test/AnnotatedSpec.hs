@@ -17,7 +17,7 @@ import Data.Cmm.AST
 import Data.List (permutations)
 import qualified Data.Map.Lazy as LM
 import Data.Lat
-import Annotated
+import Data.Cmm.Annotated
 
 main :: IO ()
 main = hspec spec
@@ -38,4 +38,9 @@ annotateCfg (n, (cfg, prog)) =
     let env = LM.fromList $ zip [0..] (repeat UnitLat)
     let ann    = cfgToAnnotated env cfg
     let prog'  = annotatedToProg ann
+    putStrLn $ "------------- " ++ n ++ " --------------"
+    putStrLn "expected:"
+    putPrettyLn prog
+    putStrLn "but got:"
+    putPrettyLn prog'
     prog' `shouldBe` prog

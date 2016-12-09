@@ -3,17 +3,16 @@
 For Automated Software Analysis at ITU 2016.
 
 ## TODO:
-- Find a way to make a source-to-source mapping from the result of the analyses
-    - I.e. actually use the result of the analyses to perform an optimization
-      on the source code (AST) ✓
-    - Use the result of an analysis to modify control-flow graph
 - Allow for backwards analyses
 - Implement a form of backwards analyses
 - Create some proper testing
     - halway done
-- Sequence multiple analyses into a "big" analysis
 
 ## DONE:
+- Find a way to make a source-to-source mapping from the result of the analyses
+    - I.e. actually use the result of the analyses to perform an optimization
+      on the source code (AST) ✓
+    - Use the result of an analysis to modify control-flow graph ✓
 - Generate new source from the control-flow graph ✓
 - Implement constrant-propagation ✓
 - Afterwards, dead-code elimination ✓
@@ -26,3 +25,4 @@ For Automated Software Analysis at ITU 2016.
 - The `While` statement is not working. Consider maybe implementing confluence
   points explicitly in the control-flow graph. Should also simplify the code
   alot in `compute`. ✓
+- Sequence multiple analyses into a "big" analysis ✓

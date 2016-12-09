@@ -5,18 +5,8 @@ import Test.Hspec
 import Data.Cmm.Parser
 import TestPrograms
 import Data.CFG
-import Data.Either (isRight)
-import Anal
-import Control.DeepSeq (force)
-import Control.Exception (evaluate)
 import Anal.DeadCode
-import TestUtils
-import Text.Pretty
 import Data.Cmm.AST
-import Data.List (permutations)
-import qualified Data.Map.Lazy as LM
-import Data.Lat
-import Annotated
 
 main :: IO ()
 main = hspec spec

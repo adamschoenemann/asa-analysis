@@ -19,11 +19,11 @@ library
   exposed-modules:     Avail, Data.Graph, Data.Cmm.Parser, Data.Cmm.AST
                      , Text.Pretty, Anal.Available, Anal.ConstProp
                      , Data.CFG, Data.ProgPoint, Anal.DeadCode, Data.Lat
-                     , Annotated
+                     , Data.Cmm.Annotated, Anal.QuasiQuoter
   -- other-modules:
   -- other-extensions:
   build-depends:       base >=4.7 && <4.8, mtl, containers, parsec, neat-interpolation
-                     , deepseq, regex-compat
+                     , deepseq, regex-compat, template-haskell, syb
   hs-source-dirs:      src
   default-language:    Haskell2010
 

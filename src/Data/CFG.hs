@@ -205,8 +205,6 @@ dfFoldCFGAlg (DFAlg while ite single) (CFG nodes) start =
       | i `S.member` explored = acc
       | otherwise =
         let explored' = S.insert i explored
-            -- out = map getNode $ getOutgoing node
-            -- folder old next = help explored' old next
         in case node of
           Source o              -> help explored' acc (getNode o) confluence
           Single s _ o          -> single i s (help explored' acc (getNode o) confluence)

@@ -1,9 +1,13 @@
-{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE FlexibleInstances, DeriveDataTypeable, DeriveGeneric #-}
 module Data.Cmm.AST where
 
 import Utils
 
 import Text.Pretty
+import Data.Typeable
+import Data.Data
+import Control.DeepSeq
+import GHC.Generics (Generic)
 
 data Expr
   = Add Expr Expr
@@ -16,7 +20,9 @@ data Expr
   | ILit Int
   | Var String
   | Input
-  deriving (Eq, Ord, Show)
+  deriving (Eq, Ord, Show, Data, Typeable, Generic)
+
+instance NFData Expr where
 
 ppExpr :: Expr -> String
 ppExpr expression = help 0 expression where
@@ -45,7 +51,9 @@ data Stmt
   | Block [Stmt]
   | While Expr Stmt
   | Output Expr
-  deriving (Eq, Ord, Show)
+  deriving (Eq, Ord, Show, Data, Typeable, Generic)
+
+instance NFData Stmt where
 
 ppStmt :: Int -> Stmt -> String
 ppStmt n stmt =
@@ -79,6 +87,5 @@ instance Pretty [Stmt] where
   ppr = ppStmts 0
 
 stmtsToStmt :: [Stmt] -> Stmt
-stmtsToStmt [] = Block [] --error "stmtsToStmt on empty list"
 stmtsToStmt [x] = x
 stmtsToStmt xs  = Block xs

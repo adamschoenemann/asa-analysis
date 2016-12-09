@@ -15,7 +15,7 @@ import Control.Applicative ((<*>),(<*),(*>))
 import Utils
 
 program :: Parser [Stmt]
-program = many (stmt <* spaces)
+program = spaces *> many (stmt <* spaces)
 
 stmt :: Parser Stmt
 stmt =  (const Skip) <$> trystring "skip" <* spaces <* char ';' <* spaces
@@ -67,3 +67,6 @@ ident  = (:) <$> letter <*> many alphaNum
 
 unsafeParse :: String -> [Stmt]
 unsafeParse p = either (error . show) id $ parse program "unsafe" p
+
+parseCmm :: String -> Either ParseError [Stmt]
+parseCmm p = parse program "cmm" p

@@ -12,6 +12,7 @@ import Data.Map.Strict (Map)
 import qualified Data.Map.Strict as M
 import Data.Set (Set, union)
 import qualified Data.Set as S
+import Data.Cmm.Annotated
 
 data CPLat
   = CPTop
@@ -46,7 +47,7 @@ instance Pretty Env where
   ppr = show
 
 getVar :: String -> Env -> CPLat
-getVar n env = maybe CPTop id $ M.lookup n env
+getVar n env = maybe CPBot id $ M.lookup n env
 
 cpStmtToTFun :: Stmt -> TFun Env
 cpStmtToTFun stmt = case stmt of
@@ -147,47 +148,37 @@ cpLatEqCombine (CPBool _) (CPInt _)   = error "type error"
 cpLatEqCombine a b                    = cpLUP a b
 
 
-cpNodeTrans :: NodeTrans Env
-cpNodeTrans = NodeTrans { transStmt = stmt, transExpr = expr } where
+cpTransform :: [Annotated Env] -> [Stmt]
+cpTransform anns = map (mapAnn stmt) anns where
   stmt :: Env -> Stmt -> Stmt
   stmt env st = case st of
     Skip        -> Skip
     Ass v e     -> Ass v (expr env e)
-    ITE e bt bf -> error "ite shouldn't happen"
-    Block ss    -> error "block shouldn't happen"
-    While e s   -> error "while should't happen"
+    ITE e bt bf -> ITE (expr env e) bt bf
+    Block ss    -> Block ss
+    While e s   -> While (expr env e) s
     Output e    -> Output (expr env e)
   expr :: Env -> Expr -> Expr
-  expr env e = maybe e id (cLatToMaybeExpr . isConst env $ e)
-  cLatToMaybeExpr cl = case cl of
-    CPTop -> Nothing
-    CPBot -> Nothing
-    CPInt  i -> return $ ILit i
-    CPBool b -> return $ BLit b
-  isConst env e = case e of
-    Add e1 e2 -> cpLatIntCombine  (+)  (isConst env e1) (isConst env e2)
-    Sub e1 e2 -> cpLatIntCombine  (-)  (isConst env e1) (isConst env e2)
-    Mul e1 e2 -> cpLatIntCombine  (*)  (isConst env e1) (isConst env e2)
-    Gt  e1 e2 -> cpLatIntToBoolCombine (>)  (isConst env e1) (isConst env e2)
-    Lt  e1 e2 -> cpLatIntToBoolCombine (<)  (isConst env e1) (isConst env e2)
-    Eq  e1 e2 -> cpLatEqCombine (isConst env e1) (isConst env e2)
-    ILit x  -> CPInt x
-    BLit b  -> CPBool b
-    Var n     -> maybe CPTop id $ M.lookup n env
-    Input     -> CPTop
+  expr env e = maybe e id (cLatToMaybeExpr . isConst env $ e) where
+    cLatToMaybeExpr cl = case cl of
+      CPTop -> Nothing
+      CPBot -> Nothing
+      CPInt  i -> return $ ILit i
+      CPBool b -> return $ BLit b
+    isConst env e = case e of
+      Add e1 e2 -> cpLatIntCombine  (+)  (isConst env e1) (isConst env e2)
+      Sub e1 e2 -> cpLatIntCombine  (-)  (isConst env e1) (isConst env e2)
+      Mul e1 e2 -> cpLatIntCombine  (*)  (isConst env e1) (isConst env e2)
+      Gt  e1 e2 -> cpLatIntToBoolCombine (>)  (isConst env e1) (isConst env e2)
+      Lt  e1 e2 -> cpLatIntToBoolCombine (<)  (isConst env e1) (isConst env e2)
+      Eq  e1 e2 -> cpLatEqCombine (isConst env e1) (isConst env e2)
+      ILit x  -> CPInt x
+      BLit b  -> CPBool b
+      Var n     -> maybe CPTop id $ M.lookup n env
+      Input     -> CPTop
 
 constPropOpt :: Optimization
 constPropOpt =
-  Opt { nodeTrans  = cpNodeTrans
-      , analysis   = constProp
-      , graphTrans = idGraphTrans
+  Opt { optTransform  = cpTransform
+      , optAnalysis   = constProp
       }
-
-cpAnalysis :: String -> String
-cpAnalysis input = either (error "parse error") (analysis) $ parse program "input" input where
-  analysis prog =
-    let analResult = analyzeProg constProp prog
-        env = analResult
-        cfg = progToCfg prog
-        transformed = nodeTransCfg cpNodeTrans cfg env
-    in ppr $ cfgToProgram transformed
