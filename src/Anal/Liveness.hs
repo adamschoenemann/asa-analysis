@@ -64,9 +64,3 @@ livenessAnal =
            , initialEnv = liveInitial
            , getDeps    = backwards (LEnv S.empty)
            }
-
--- livenessOpt :: Optimization
--- livenessOpt =
---   Opt { optTransform  = lTransform
---       , optAnalysis   = livenessAnal
---       }

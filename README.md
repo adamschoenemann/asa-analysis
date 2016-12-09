@@ -3,12 +3,12 @@
 For Automated Software Analysis at ITU 2016.
 
 ## TODO:
-- Allow for backwards analyses
-- Implement a form of backwards analyses
-- Create some proper testing
-    - halway done
+- Write report and presentation
 
 ## DONE:
+- Allow for backwards analyses ✓
+- Implement a form of backwards analyses ✓
+- Create some proper testing ✓
 - Find a way to make a source-to-source mapping from the result of the analyses
     - I.e. actually use the result of the analyses to perform an optimization
       on the source code (AST) ✓
