@@ -1,5 +1,5 @@
 
-module Anal.QuasiQuoter where
+module Data.Cmm.QuasiQuoter where
 
 import Data.Cmm.Parser
 import Data.Cmm.AST

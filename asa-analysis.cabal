@@ -19,7 +19,7 @@ library
   exposed-modules:     Data.Graph, Data.Cmm.Parser, Data.Cmm.AST
                      , Text.Pretty, Anal.Available, Anal.ConstProp
                      , Data.CFG, Anal.DeadCode, Data.Lat
-                     , Data.Cmm.Annotated, Anal.QuasiQuoter
+                     , Data.Cmm.Annotated, Data.Cmm.QuasiQuoter
   -- other-modules:
   -- other-extensions:
   build-depends:       base >=4.7 && <4.8, mtl, containers, parsec, neat-interpolation
