@@ -39,6 +39,10 @@ deadCodeOpt =
       , optAnalysis   = idAnalysis
       }
 
+-- this elimination works directly on the control-flow graph.
+-- it is a lot more involved than working on the AST tbh
+-- so consider it deprecated. Also because the analysis interface no longer
+-- accepts graph transformation algorithms
 deadCodeElim :: CFG -> CFG
 deadCodeElim (CFG nodes) =
   let (_, newNodes) = runState (helper S.empty =<< getNode 0) nodes
