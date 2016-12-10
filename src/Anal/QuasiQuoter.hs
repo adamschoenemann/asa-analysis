@@ -3,8 +3,6 @@ module Anal.QuasiQuoter where
 
 import Data.Cmm.Parser
 import Data.Cmm.AST
-import Data.Generics
-import qualified Language.Haskell.TH as TH
 import Language.Haskell.TH.Quote
 
 cmm :: QuasiQuoter

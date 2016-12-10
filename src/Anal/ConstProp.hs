@@ -4,15 +4,14 @@ module Anal.ConstProp where
 
 import Anal
 import Data.Cmm.AST
-import Data.Cmm.Parser
 import Data.CFG
 import Text.Pretty
--- import Data.List (intercalate)
 import Data.Map.Strict (Map)
 import qualified Data.Map.Strict as M
-import Data.Set (Set, union)
+import Data.Set (union)
 import qualified Data.Set as S
 import Data.Cmm.Annotated
+import Control.DeepSeq
 
 data CPLat
   = CPTop
@@ -20,6 +19,8 @@ data CPLat
   | CPInt  Int
   | CPBool Bool
   deriving (Show, Eq, Ord)
+
+instance NFData CPLat where
 
 instance Lat CPLat where
   bottom = CPBot
@@ -49,15 +50,11 @@ instance Pretty Env where
 getVar :: String -> Env -> CPLat
 getVar n env = maybe CPBot id $ M.lookup n env
 
-cpStmtToTFun :: Stmt -> TFun Env
-cpStmtToTFun stmt = case stmt of
-  Skip         -> id
-  Ass v e      -> \env -> M.insert v (evalExpr e env) env
-  ITE _ _ _    -> id
-  Block []     -> id
-  Block (s:_)  -> cpStmtToTFun s
-  While _ _    -> id
-  Output _     -> id
+cpSingleToTFun :: SingleStmt -> TFun Env
+cpSingleToTFun stmt = case stmt of
+  Skip     -> id
+  Ass v e  -> \env -> M.insert v (evalExpr e env) env
+  Output _ -> id
 
 evalExpr :: Expr -> Env -> CPLat
 evalExpr e env = case e of
@@ -105,23 +102,20 @@ collectVars cfg =
   let vars = dfTraverseCFG cfg (\acc n -> acc `union` collectVars' n) S.empty
   in  M.fromList $ map (\v -> (v, CPBot)) $ S.toList vars where
   collectVars' node = case node of
-    Source _              -> S.empty
-    Single stmt _ _       ->
-      case stmt of
+    NSource _              -> S.empty
+    NSingle single _ _       ->
+      case single of
         Skip -> S.empty
         Ass v _ -> S.singleton v
-        ITE e _ _ -> error "ITE cannot be single"
-        Block stmts' -> error "Block cannot be single"
-        While e _ -> error "While cannot be single"
         Output e  -> S.empty
-    CondITE e _ _ _ _     -> S.empty
-    CondWhile e _ _ _ _   -> S.empty
-    Confluence _ _        -> S.empty
-    Sink _                -> S.empty
+    NITE e _ _ _ _     -> S.empty
+    NWhile e _ _ _ _   -> S.empty
+    NConfl _ _        -> S.empty
+    NSink _                -> S.empty
 
 constProp :: Analysis Env
 constProp =
-  Analysis { stmtToTFun = cpStmtToTFun -- :: Stmt -> TFun
+  Analysis { singleToTFun = cpSingleToTFun -- :: Stmt -> TFun
            , condToTFun = \e -> id
            , initialEnv = cpInitial -- :: [Stmt] -> Set Expr
            , getDeps = forward (M.empty)
@@ -152,12 +146,12 @@ cpTransform :: [Annotated Env] -> [Stmt]
 cpTransform anns = map (mapAnn stmt) anns where
   stmt :: Env -> Stmt -> Stmt
   stmt env st = case st of
-    Skip        -> Skip
-    Ass v e     -> Ass v (expr env e)
-    ITE e bt bf -> ITE (expr env e) bt bf
-    Block ss    -> Block ss
-    While e s   -> While (expr env e) s
-    Output e    -> Output (expr env e)
+    Single (Skip    ) -> Single Skip
+    Single (Ass v e ) -> Single $ Ass v (expr env e)
+    Single (Output e) -> Single $ Output (expr env e)
+    ITE e bt bf       -> ITE (expr env e) bt bf
+    Block ss          -> Block ss
+    While e s         -> While (expr env e) s
   expr :: Env -> Expr -> Expr
   expr env e = maybe e id (cLatToMaybeExpr . isConst env $ e) where
     cLatToMaybeExpr cl = case cl of

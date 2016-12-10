@@ -5,7 +5,7 @@ import Data.Cmm.Parser
 import TestPrograms
 import Data.Either (isRight)
 import Anal.Available
-import Anal (analyzeProg, printAnalysis)
+import Anal (analyzeProg)
 import Data.Cmm.AST
 import Data.Map (Map)
 import qualified Data.Map as M

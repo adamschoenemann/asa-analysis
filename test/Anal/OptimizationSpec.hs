@@ -4,17 +4,11 @@ module Anal.OptimizationSpec where
 import Test.Hspec
 import Data.Cmm.Parser
 import TestPrograms
-import Data.CFG
 import Data.Either (isRight)
 import Anal
-import Control.DeepSeq (force)
-import Control.Exception (evaluate)
 import Anal.DeadCode
 import Anal.ConstProp
-import TestUtils
-import Text.Pretty
 import Data.Cmm.AST
-import Data.List (permutations)
 
 main :: IO ()
 main = hspec spec
@@ -33,7 +27,7 @@ spec = do
       ep `shouldSatisfy` isRight
       let Right p = ep
       let optProg = runOpts deadCodeOpt constPropOpt p
-      let expectProg = [Ass "x" (BLit True),Ass "y" (BLit False),Ass "z" (ILit 1764)]
+      let expectProg = map Single [Ass "x" (BLit True),Ass "y" (BLit False),Ass "z" (ILit 1764)]
       optProg `shouldBe` expectProg
 
     it "should work with first deadCodeElim and then constProp on in3" $ do
@@ -45,13 +39,13 @@ spec = do
       -- of dead-code would eliminate the last branch
       let optimized = runOpts constPropOpt deadCodeOpt p
       let expected =
-            [ Ass "x" (BLit True)
+            [ Single $ Ass "x" (BLit True)
             , ITE (BLit True)
-                  (Block [ Ass "y" (BLit False)
-                         , Ass "z" (ILit 1764)
+                  (Block [ Single $ Ass "y" (BLit False)
+                         , Single $ Ass "z" (ILit 1764)
                          ]
                   )
-                  (Ass "y" (ILit 0))
+                  (Single $ Ass "y" (ILit 0))
             ]
       optimized `shouldBe` expected
   describe "optimizeProg (constProp then deadCode)" $ do
@@ -61,7 +55,7 @@ spec = do
       let Right p = ep
       let optProg = optimizeProg [deadCodeOpt, constPropOpt] p
       -- putPrettyLn optProg
-      let expectProg = [Ass "a" (ILit 59),Ass "b" (ILit 68),Ass "c" (ILit 0),Output (ILit 59)]
+      let expectProg = map Single [Ass "a" (ILit 59),Ass "b" (ILit 68),Ass "c" (ILit 0),Output (ILit 59)]
       optProg `shouldBe` expectProg
 
   describe "seqOpts" $ do

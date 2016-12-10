@@ -18,14 +18,14 @@ program :: Parser [Stmt]
 program = spaces *> many (stmt <* spaces)
 
 stmt :: Parser Stmt
-stmt =  (const Skip) <$> trystring "skip" <* spaces <* char ';' <* spaces
+stmt =  (const $ Single Skip) <$> trystring "skip" <* spaces <* char ';' <* spaces
     <|> ITE <$> (trystring "if" *> spaces1 *> expr) <*>
                      (trystring "then" *> spaces1 *> stmt <* spaces) <*>
                      (trystring "else" *> spaces1 *> stmt <* spaces)
     <|> While <$> (trystring "while" *> spaces1 *> expr) <*>
                      (trystring "do" *> spaces1 *> stmt) <* spaces
-    <|> Output <$> (trystring "output" *> spaces1 *> expr <* char ';') <* spaces
-    <|> Ass <$> (ident <* spaces) <*> (string ":=" *> spaces *> expr <* char ';') <* spaces
+    <|> (Single . Output) <$> (trystring "output" *> spaces1 *> expr <* char ';') <* spaces
+    <|> (\v e -> Single $ Ass v e) <$> (ident <* spaces) <*> (string ":=" *> spaces *> expr <* char ';') <* spaces
     <|> Block <$> (brackets block) <* spaces
       where
         block = sepBy stmt spaces

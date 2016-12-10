@@ -4,10 +4,8 @@ module Anal.LivenessSpec where
 import Test.Hspec
 import Data.Cmm.Parser
 import TestPrograms
-import Data.CFG
 import Anal.Liveness
 import Data.Cmm.AST
-import Text.Pretty
 import Anal
 
 main :: IO ()

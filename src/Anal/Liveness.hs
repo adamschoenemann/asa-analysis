@@ -2,17 +2,11 @@
 module Anal.Liveness where
 
 import Data.Set (Set)
-import Data.Map.Strict (Map)
-import qualified Data.Map.Strict as M
 import qualified Data.Set as S
 import Data.Cmm.AST
-import Data.CFG
-import Data.Functor ((<$>))
-import Utils
 import Anal
-import Data.Cmm.Annotated
 import Text.Pretty
-
+import Data.CFG
 
 newtype LiveEnv = LEnv { unLive :: (Set String) } deriving (Ord, Eq, Show)
 
@@ -23,14 +17,11 @@ instance Lat LiveEnv where
 instance Pretty LiveEnv where
   ppr = show
 
-liveStmtToTFun :: Stmt -> TFun LiveEnv
-liveStmtToTFun stmt = case stmt of
-    Skip         -> id
-    Ass v e      -> union (vars e) . delete v
-    ITE e _ _    -> error "ITE shouldn't happen"
-    Block _      -> error "Block should not happen"
-    While e _    -> error "While should not happen"
-    Output e     -> union (vars e)
+liveSingleToTFun :: SingleStmt -> TFun LiveEnv
+liveSingleToTFun stmt = case stmt of
+    Skip     -> id
+    Ass v e  -> union (vars e) . delete v
+    Output e -> union (vars e)
   where
     union e = LEnv . S.union (unLive e) . unLive
     delete v = LEnv . S.delete v . unLive
@@ -59,7 +50,7 @@ liveInitial = const (LEnv S.empty)
 
 livenessAnal :: Analysis LiveEnv
 livenessAnal =
-  Analysis { stmtToTFun = liveStmtToTFun
+  Analysis { singleToTFun = liveSingleToTFun
            , condToTFun = liveExprToTFun
            , initialEnv = liveInitial
            , getDeps    = backwards (LEnv S.empty)

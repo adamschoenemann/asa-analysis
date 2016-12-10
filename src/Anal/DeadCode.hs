@@ -19,8 +19,7 @@ deadCodeTrans :: [Stmt] -> [Stmt]
 deadCodeTrans ss = foldr dct [] ss where
   dct stmt acc =
     case stmt of
-      Skip        -> Skip : acc
-      Ass v e     -> Ass v e : acc
+      Single _ -> stmt : acc
       ITE e bt bf ->
         case e of
           BLit True  -> dct bt acc
@@ -32,7 +31,6 @@ deadCodeTrans ss = foldr dct [] ss where
           BLit True  -> While e s : acc
           BLit False -> acc
           _          -> While e (s2s $ dct s []) : acc
-      Output e    -> Output e : acc
   s2s = stmtsToStmt
 
 deadCodeOpt :: Optimization
@@ -51,23 +49,23 @@ deadCodeElim (CFG nodes) =
       | otherwise =
         let explored' = S.insert k explored
         in  case node of
-          CondITE (BLit True) i bt bf c  -> (prune bf `andKeep` bt) k explored' i c
-          CondITE (BLit False) i bt bf c -> (prune bt `andKeep` bf) k explored' i c
-          CondWhile (BLit True) i bt bf c -> do
-            -- remove false branch and never stop (until Sink of course).
+          NITE (BLit True) i bt bf c  -> (prune bf `andKeep` bt) k explored' i c
+          NITE (BLit False) i bt bf c -> (prune bt `andKeep` bf) k explored' i c
+          NWhile (BLit True) i bt bf c -> do
+            -- remove false branch and never stop (until NSink of course).
             -- We have an infinite loop!
             removeBranch explored' k 0 =<< (getNode bf)
             -- modify (M.delete k) -- delete the while condition
             -- modify (M.adjust (setOut bt k) i) -- point the previous to the true branch
             -- modify (M.adjust (setIn i k)  bt) -- point the true branch's in to previous
             helper explored' =<< (getNode bt)
-            modify (M.insert bf (Sink i))
-          CondWhile (BLit False) i bt bf c -> do
+            modify (M.insert bf (NSink i))
+          NWhile (BLit False) i bt bf c -> do
              removeBranch explored' k c =<< (getNode bt)
              -- removeBranch has now set this conditional node's input to be
              -- the previous statement. So now, we can simply remove this
              -- node and wire its input into the false branch.
-             (_, CondWhile _ i' _ _ _) <- getNode k
+             (_, NWhile _ i' _ _ _) <- getNode k
              modify (M.delete k)
              modify (M.adjust (setIn  i' k) bf) -- set false branch's input to i'
              modify (M.adjust (setOut bf k) i')
@@ -84,7 +82,7 @@ deadCodeElim (CFG nodes) =
       helper explored' =<< (getNode keep)
 
     -- i is incoming node id
-    removeBranch explored i c (k,Confluence (l,r) o)
+    removeBranch explored i c (k,NConfl (l,r) o)
       | k == c = do
           let newEnd = if l == i then r else l
           -- set the out-edge of newInd to o
@@ -102,27 +100,27 @@ deadCodeElim (CFG nodes) =
           mapM_ (\n -> removeBranch explored' k c =<< getNode n) $ getOutgoing nd
 
     setIn  newi oldi nd = case nd of
-      Source o              -> error "cant set incoming of Source"
-      Single s i o          -> Single s newi o
-      CondITE e i bt bf c   -> CondITE e newi bt bf c
-      CondWhile e i bt bf c -> CondWhile e newi bt bf c
-      Confluence (i1, i2) o ->
+      NSource o              -> error "cant set incoming of NSource"
+      NSingle s i o          -> NSingle s newi o
+      NITE e i bt bf c   -> NITE e newi bt bf c
+      NWhile e i bt bf c -> NWhile e newi bt bf c
+      NConfl (i1, i2) o ->
         let newins = (chngIfOldI i1, chngIfOldI i2)
             chngIfOldI i = if i == oldi then newi else i
-        in  Confluence newins o
-      Sink i                -> Sink newi
+        in  NConfl newins o
+      NSink i                -> NSink newi
 
     setOut newo oldo nd = case nd of
-        Source o              -> Source newo
-        Single s i o          -> Single s i newo
-        CondITE e i bt bf c   ->
+        NSource o              -> NSource newo
+        NSingle s i o          -> NSingle s i newo
+        NITE e i bt bf c   ->
           let (bt',bf') = (chngIfOldOut bt, chngIfOldOut bf)
-          in CondITE e i bt' bf' c
-        CondWhile e i bt bf c ->
+          in NITE e i bt' bf' c
+        NWhile e i bt bf c ->
           let (bt',bf') = (chngIfOldOut bt, chngIfOldOut bf)
-          in CondWhile e i bt' bf' c
-        Confluence (i1, i2) o -> Confluence (i1, i2) newo
-        Sink i                -> error "cant set out of Sink"
+          in NWhile e i bt' bf' c
+        NConfl (i1, i2) o -> NConfl (i1, i2) newo
+        NSink i                -> error "cant set out of NSink"
       where
         chngIfOldOut o = if o == oldo then newo else o
 

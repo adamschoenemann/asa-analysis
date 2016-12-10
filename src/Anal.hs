@@ -5,7 +5,6 @@ module Anal
   , module Data.Lat
   ) where
 
-import Data.Set (Set, union, (\\))
 import Data.Map.Strict (Map)
 import qualified Data.Map.Strict as M
 import qualified Data.Set as S
@@ -14,9 +13,7 @@ import Data.Cmm.Annotated
 import Data.CFG
 import Text.Pretty
 import Utils
-import Control.Monad.State (runState, get, modify, State)
-import Debug.Trace
-import Data.Functor ((<$>))
+import Control.Monad.State (runState, modify)
 import Data.Lat
 
 
@@ -29,27 +26,27 @@ type Equation a = Map ID a -> a
 forward :: Lat a => a -> Node -> Map ID a -> a
 forward srcEnv node envs =
   case node of
-      Source o              -> srcEnv
-      Single stmt i o       -> getEnv i
-      CondITE e i bt bf _   -> getEnv i
-      CondWhile e i bt bf _ -> getEnv i
-      Confluence (i1, i2) o -> leastUpperBound (getEnv i1) (getEnv i2)
-      Sink i                -> getEnv i
+      NSource o              -> srcEnv
+      NSingle stmt i o       -> getEnv i
+      NITE e i bt bf _   -> getEnv i
+      NWhile e i bt bf _ -> getEnv i
+      NConfl (i1, i2) o -> leastUpperBound (getEnv i1) (getEnv i2)
+      NSink i                -> getEnv i
   where getEnv k = unsafeLookup k envs
 
 backwards :: Lat a => a -> Node -> Map ID a -> a
 backwards sinkEnv node envs =
   case node of
-      Source o              -> getEnv o
-      Single stmt i o       -> getEnv o
-      CondITE e i bt bf _   -> leastUpperBound (getEnv bt) (getEnv bf)
-      CondWhile e i bt bf _ -> leastUpperBound (getEnv bt) (getEnv bf)
-      Confluence (i1, i2) o -> getEnv o
-      Sink i                -> sinkEnv
+      NSource o              -> getEnv o
+      NSingle stmt i o       -> getEnv o
+      NITE e i bt bf _   -> leastUpperBound (getEnv bt) (getEnv bf)
+      NWhile e i bt bf _ -> leastUpperBound (getEnv bt) (getEnv bf)
+      NConfl (i1, i2) o -> getEnv o
+      NSink i                -> sinkEnv
   where getEnv k = unsafeLookup k envs
 
 data Analysis a
-  = Analysis { stmtToTFun :: Stmt -> TFun a
+  = Analysis { singleToTFun :: SingleStmt -> TFun a
              , condToTFun :: Expr -> TFun a
              , initialEnv :: CFG -> a
              , getDeps    :: Node -> Map ID a -> a
@@ -57,7 +54,7 @@ data Analysis a
 
 idAnalysis :: Lat a => Analysis a
 idAnalysis =
-  Analysis { stmtToTFun = const id
+  Analysis { singleToTFun = const id
            , condToTFun = const id
            , initialEnv = const bottom
            , getDeps    = forward bottom
@@ -68,12 +65,12 @@ cfgToEqs anal (CFG nodes) = M.mapWithKey nodeToEq nodes where
   nodeToEq k node prev =
     let dep = (getDeps anal) node prev
     in case node of
-      Source o              -> dep
-      Single stmt i o       -> (stmtToTFun anal $ stmt) dep
-      CondITE e i bt bf _   -> (condToTFun anal $ e)    dep
-      CondWhile e i bt bf _ -> (condToTFun anal $ e)    dep
-      Confluence (i1, i2) o -> dep
-      Sink i                -> dep
+      NSource o              -> dep
+      NSingle stmt i o       -> (singleToTFun anal $ stmt) dep
+      NITE e i bt bf _   -> (condToTFun anal $ e)    dep
+      NWhile e i bt bf _ -> (condToTFun anal $ e)    dep
+      NConfl (i1, i2) o -> dep
+      NSink i                -> dep
 
 type BigT a = Map ID a -> Map ID a
 
@@ -122,7 +119,7 @@ printAnalysis anal = mapM_ (\(i, r) -> putStrLn $ (show i ++ ": " ++ show r)) .
 -- the data in the nodes
 data NodeTrans a = NodeTrans
   { transExpr :: a -> Expr -> Expr
-  , transStmt :: a -> Stmt -> Stmt
+  , transStmt :: a -> SingleStmt -> SingleStmt
   }
 
 idNodeTrans :: NodeTrans a
@@ -143,12 +140,12 @@ nodeTransCfg transformer (CFG nodes) envMap =
           mapM_ (helper explored' . getNode) $ getOutgoing node
     trans node =
       case node of
-        Source o              -> Source o
-        Single s i o          -> Single    ((transStmt transformer) (getEnv i) s) i o
-        CondITE e i bt bf c   -> CondITE   ((transExpr transformer) (getEnv i) e) i bt bf c
-        CondWhile e i bt bf c -> CondWhile ((transExpr transformer) (getEnv i) e) i bt bf c
-        Confluence (i1, i2) o -> Confluence (i1, i2) o
-        Sink i                -> Sink i
+        NSource o              -> NSource o
+        NSingle s i o          -> NSingle ((transStmt transformer) (getEnv i) s) i o
+        NITE e i bt bf c   -> NITE   ((transExpr transformer) (getEnv i) e) i bt bf c
+        NWhile e i bt bf c -> NWhile ((transExpr transformer) (getEnv i) e) i bt bf c
+        NConfl (i1, i2) o -> NConfl (i1, i2) o
+        NSink i                -> NSink i
     getNode i = (i,unsafeLookup i nodes)
     getEnv i = unsafeLookup i envMap
 

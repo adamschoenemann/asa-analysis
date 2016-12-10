@@ -8,11 +8,9 @@ import qualified Data.Map.Strict as M
 import Data.Map.Strict (Map)
 import Data.Set (Set)
 import qualified Data.Set as S
-import Data.Functor ((<$>))
 import Utils (unsafeLookup)
 import Data.List (intercalate)
 import Text.Pretty
-import Debug.Trace
 import Control.DeepSeq
 
 type ID = Int
@@ -23,24 +21,24 @@ type BrFalse = ID
 type End = ID
 
 data Node
-  = Source Out
-  | Single Stmt In Out
-  | CondITE Expr In BrTrue BrFalse End -- end of the conditional (points to confluence)
-  | CondWhile Expr In BrTrue BrFalse End -- end of the conditional (points to confluence)
-  | Confluence (In, In) Out
-  | Sink In
+  = NSource Out
+  | NSingle SingleStmt In Out
+  | NITE Expr In BrTrue BrFalse End -- end of the conditional (points to confluence)
+  | NWhile Expr In BrTrue BrFalse End -- end of the conditional (points to confluence)
+  | NConfl (In, In) Out
+  | NSink In
   deriving (Show, Eq, Generic)
 
 instance NFData Node
 
 getOutgoing :: Node -> [ID]
 getOutgoing node = case node of
-  Source o              -> [o]
-  Single s i o          -> [o]
-  CondITE e i bt bf c   -> [bt,bf]
-  CondWhile e i bt bf c -> [bt,bf]
-  Confluence (i1, i2) o -> [o]
-  Sink i                -> []
+  NSource o              -> [o]
+  NSingle s i o          -> [o]
+  NITE e i bt bf c   -> [bt,bf]
+  NWhile e i bt bf c -> [bt,bf]
+  NConfl (i1, i2) o -> [o]
+  NSink i                -> []
 
 data CFG = CFG (Map ID Node) deriving (Show, Eq, Generic)
 
@@ -57,17 +55,17 @@ cfgToGviz name (CFG m) =
     label l  = ("label", l)
     backedge k o = "" -- "\n  " ++ show k ++ " -> " ++ show o ++ " [style=dashed]"
     gviz k n = case n of
-      Source o              -> (show k ++ attrs [("shape", "point")],     show k ++ " -> " ++ show o)
-      Single s i o          -> (show k ++ attrs [label (ppr s), ("shape", "box")],
+      NSource o              -> (show k ++ attrs [("shape", "point")],     show k ++ " -> " ++ show o)
+      NSingle s i o          -> (show k ++ attrs [label (ppr s), ("shape", "box")],
                                 show k ++ " -> " ++ show o ++ backedge k i)
-      CondITE e i bt bf _   -> (show k ++ attrs [label (ppr e), ("shape","diamond")],
+      NITE e i bt bf _   -> (show k ++ attrs [label (ppr e), ("shape","diamond")],
                                 show k ++ " -> " ++ show bt ++ "[label=\"True\"]\n  " ++ show k ++ " -> " ++ show bf ++ "[label=\"False\"]"
                                 ++ backedge k i)
-      CondWhile e i bt bf _ -> (show k ++ attrs [label (ppr e), ("shape", "diamond")],
+      NWhile e i bt bf _ -> (show k ++ attrs [label (ppr e), ("shape", "diamond")],
                                 show k ++ " -> " ++ show bt ++ "[label=\"True\"]\n  " ++ show k ++ " -> " ++ show bf ++ "[label=\"False\"]"
                                 ++ backedge k i)
-      Confluence (i1, i2) o -> (show k ++ attrs [("shape", "circle")],show k ++ " -> " ++ show o ++ backedge k i1 ++ backedge k i2)
-      Sink i                -> (show k ++ attrs [("shape", "point")], backedge k i) -- show k
+      NConfl (i1, i2) o -> (show k ++ attrs [("shape", "circle")],show k ++ " -> " ++ show o ++ backedge k i1 ++ backedge k i2)
+      NSink i                -> (show k ++ attrs [("shape", "point")], backedge k i) -- show k
 
 writeVizCfg :: CFG -> String -> IO ()
 writeVizCfg g name = writeFile ("./graphviz/" ++ name ++ ".dot") (cfgToGviz name g)
@@ -76,7 +74,7 @@ progToCfg :: [Stmt] -> CFG
 progToCfg stmts =
   let ((i, fn), assoc') = runState (cfgStmt 0 1 $ Block stmts) []
       (_, assoc)      = runState (fn (i+1)) assoc'
-      graph = (0, Source 1) : (assoc ++ [(i+1, Sink i)])
+      graph = (0, NSource 1) : (assoc ++ [(i+1, NSink i)])
   in CFG $ M.fromList graph
 
 -- Takes an int representing the "root" ID
@@ -88,9 +86,9 @@ progToCfg stmts =
 -- outgoing edge.
 cfgStmt :: In -> Int -> Stmt -> CFGState (End, Out -> CFGState ID)
 cfgStmt p i stmt = case stmt of
-  Skip     -> return $ (i, \j -> newNode i $ Single Skip p j)
-  Ass v e  -> return $ (i, \j -> newNode i $ Single (Ass v e) p j)
-  Output e -> return $ (i, \j -> newNode i $ Single (Output e) p j)
+  Single Skip     -> return $ (i, \j -> newNode i $ NSingle Skip p j)
+  Single (Ass v e ) -> return $ (i, \j -> newNode i $ NSingle (Ass v e) p j)
+  Single (Output e) -> return $ (i, \j -> newNode i $ NSingle (Output e) p j)
   Block [] -> return $ (i, \j -> return i)
   Block [s] -> cfgStmt p i s
   Block (s:ss) -> do
@@ -100,8 +98,8 @@ cfgStmt p i stmt = case stmt of
   ITE e tr fl -> do
     (trid, trb) <- cfgStmt i (i+1)    tr
     (flid, flb) <- cfgStmt i (trid+1) fl
-    _ <- newNode i $ CondITE e (i-1) (i+1) (trid+1) (flid+1)
-    let fun = \j -> newNode (flid+1) $ Confluence (trid, flid) j
+    _ <- newNode i $ NITE e (i-1) (i+1) (trid+1) (flid+1)
+    let fun = \j -> newNode (flid+1) $ NConfl (trid, flid) j
     _ <- trb (flid + 1)
     _ <- flb (flid + 1)
     return (flid + 1, fun)
@@ -117,8 +115,8 @@ cfgStmt p i stmt = case stmt of
   While e tr -> do
     (trid, trb) <- cfgStmt (i+1) (i+2) tr -- create true branch
     _ <- trb i -- make end of true branch point to confluence
-    _ <- newNode i     $ Confluence (i-1, trid) (i+1) -- create confluence
-    let fun = \j -> newNode (i+1) $ CondWhile e i (i+2) (trid+1) i -- create conditional node
+    _ <- newNode i     $ NConfl (i-1, trid) (i+1) -- create confluence
+    let fun = \j -> newNode (i+1) $ NWhile e i (i+2) (trid+1) i -- create conditional node
     return (trid, fun)
 
 newNode :: Int -> Node -> CFGState ID
@@ -144,14 +142,14 @@ nodeToProgram n (CFG nodes) = help S.empty n proceed where
     | otherwise =
         let ex' = S.insert i ex
         in case nd of
-          Source o              -> help ex' (getNode o) handleConf
-          Single s i o          -> stmtToProgram ex' s i o handleConf
-          CondITE e i bt bf c   -> iteToProgram ex' e bt bf c
-          CondWhile e i bt bf c -> whileToProgram ex' e bt bf c
-          Confluence (i1, i2) o -> handleConf ex' i o
-          Sink i                -> ([], i)
+          NSource o          -> help ex' (getNode o) handleConf
+          NSingle s i o      -> singleToProgram ex' (Single s) i o handleConf
+          NITE e i bt bf c   -> iteToProgram ex' e bt bf c
+          NWhile e i bt bf c -> whileToProgram ex' e bt bf c
+          NConfl (i1, i2) o  -> handleConf ex' i o
+          NSink i            -> ([], i)
 
-  stmtToProgram ex stmt i next handleConf =
+  singleToProgram ex stmt i next handleConf =
     let (stmt', i) = help ex (getNode next) handleConf
     in  (stmt:stmt', i)
 
@@ -193,7 +191,7 @@ dfTraverseCFG (CFG nodes) fn start =
 data DFAlg a =
   DFAlg { dfWhile  :: ID -> Expr -> a -> a -> a
         , dfITE    :: ID -> Expr -> a -> a -> a -> a
-        , dfSingle :: ID -> Stmt -> a -> a
+        , dfNSingle :: ID -> SingleStmt -> a -> a
         }
 
 dfFoldCFGAlg :: DFAlg a -> CFG -> a -> a
@@ -206,19 +204,19 @@ dfFoldCFGAlg (DFAlg while ite single) (CFG nodes) start =
       | otherwise =
         let explored' = S.insert i explored
         in case node of
-          Source o              -> help explored' acc (getNode o) confluence
-          Single s _ o          -> single i s (help explored' acc (getNode o) confluence)
-          CondITE e _ bt bf c   ->
+          NSource o              -> help explored' acc (getNode o) confluence
+          NSingle s _ o          -> single i s (help explored' acc (getNode o) confluence)
+          NITE e _ bt bf c   ->
             let trb  = help explored' acc (getNode bt) (stopAt c)
                 flb  = help explored' acc (getNode bf) (stopAt c)
-                (_,Confluence _ o) = getNode c
+                (_,NConfl _ o) = getNode c
             in  ite i e trb flb (help explored' acc (getNode o) proceed)
-          CondWhile e _ bt bf c ->
+          NWhile e _ bt bf c ->
             let trb = help explored' acc (getNode bt) (stopAt c)
                 flb = help explored' acc (getNode bf) confluence
             in  while i e trb flb
-          Confluence (i1, i2) o -> confluence explored' i o acc
-          Sink _                -> acc
+          NConfl (i1, i2) o -> confluence explored' i o acc
+          NSink _                -> acc
 
     proceed ex  i' n acc  = help ex acc (getNode n) proceed
     stopAt j ex i' n acc

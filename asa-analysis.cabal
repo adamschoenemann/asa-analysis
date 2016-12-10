@@ -16,7 +16,7 @@ build-type:          Simple
 cabal-version:       >=1.10
 
 library
-  exposed-modules:     Avail, Data.Graph, Data.Cmm.Parser, Data.Cmm.AST
+  exposed-modules:     Data.Graph, Data.Cmm.Parser, Data.Cmm.AST
                      , Text.Pretty, Anal.Available, Anal.ConstProp
                      , Data.CFG, Anal.DeadCode, Data.Lat
                      , Data.Cmm.Annotated, Anal.QuasiQuoter

@@ -47,31 +47,25 @@ unavail var l  = l \\ S.filter (occursIn var) l where
 assign :: String -> Expr -> Set Expr -> Set Expr
 assign v e  = avail e . unavail v
 
-availStmtToTFun :: Stmt -> TFun (Set Expr)
-availStmtToTFun stmt = case stmt of
-  Skip -> id
-  Ass v e -> assign v e
-  ITE e _ _ -> avail e
-  Block _ -> id
-  While e _ -> avail e
-  Output e  -> avail e
+availSingleToTFun :: SingleStmt -> TFun (Set Expr)
+availSingleToTFun stmt = case stmt of
+  Skip     -> id
+  Ass v e  -> assign v e
+  Output e -> avail e
 
 collectExprs :: CFG -> Set Expr
 collectExprs cfg = dfTraverseCFG cfg (\acc n -> acc `union` collectExprs' n) S.empty where
   collectExprs' node = case node of
-    Source _              -> S.empty
-    Single stmt _ _       ->
-      case stmt of
-        Skip -> S.empty
-        Ass _ e -> exprs e
-        ITE e _ _ -> error "ITE cannot be single"
-        Block stmts' -> error "Block cannot be single"
-        While e _ -> error "While cannot be single"
-        Output e  -> exprs e
-    CondITE e _ _ _ _     -> exprs e
-    CondWhile e _ _ _ _   -> exprs e
-    Confluence _ _        -> S.empty
-    Sink _                -> S.empty
+    NSource _              -> S.empty
+    NSingle single _ _       ->
+      case single of
+        Skip     -> S.empty
+        Ass _ e  -> exprs e
+        Output e -> exprs e
+    NITE e _ _ _ _     -> exprs e
+    NWhile e _ _ _ _   -> exprs e
+    NConfl _ _        -> S.empty
+    NSink _                -> S.empty
 
 instance Lat (Set Expr) where
   bottom = S.empty -- actually, this is top
@@ -79,7 +73,7 @@ instance Lat (Set Expr) where
 
 available :: Analysis (Set Expr)
 available =
-  Analysis { stmtToTFun = availStmtToTFun -- :: Stmt -> TFun
+  Analysis { singleToTFun = availSingleToTFun -- :: Stmt -> TFun
            , condToTFun = avail
            , initialEnv = collectExprs
            , getDeps = forward S.empty
