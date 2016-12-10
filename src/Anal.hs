@@ -7,13 +7,11 @@ module Anal
 
 import Data.Map.Strict (Map)
 import qualified Data.Map.Strict as M
-import qualified Data.Set as S
 import Data.Cmm.AST
 import Data.Cmm.Annotated
 import Data.CFG
 import Text.Pretty
 import Utils
-import Control.Monad.State (runState, modify)
 import Data.Lat
 
 
@@ -114,41 +112,6 @@ printAnalysis :: (Lat a, Show a) => Analysis a -> [Stmt] -> IO ()
 printAnalysis anal = mapM_ (\(i, r) -> putStrLn $ (show i ++ ": " ++ show r)) .
                         M.toList . analyzeProg anal
 
-
--- a graph transformation that *preserves* the shape of the graph, but transforms
--- the data in the nodes
-data NodeTrans a = NodeTrans
-  { transExpr :: a -> Expr -> Expr
-  , transStmt :: a -> SingleStmt -> SingleStmt
-  }
-
-idNodeTrans :: NodeTrans a
-idNodeTrans = NodeTrans { transExpr = const id , transStmt = const id }
-
-idGraphTrans = id
-
-nodeTransCfg :: Lat a => NodeTrans a -> CFG -> Map ID a -> CFG
-nodeTransCfg transformer (CFG nodes) envMap =
-  let (_, newNodes) = runState (helper S.empty (getNode 0)) nodes
-  in  CFG newNodes where
-    helper explored (k, node)
-      | k `S.member` explored = return ()
-      | otherwise = do
-          let node' = trans node
-          modify (M.insert k node')
-          let explored' = S.insert k explored
-          mapM_ (helper explored' . getNode) $ getOutgoing node
-    trans node =
-      case node of
-        NSource o              -> NSource o
-        NSingle s i o          -> NSingle ((transStmt transformer) (getEnv i) s) i o
-        NITE e i bt bf c   -> NITE   ((transExpr transformer) (getEnv i) e) i bt bf c
-        NWhile e i bt bf c -> NWhile ((transExpr transformer) (getEnv i) e) i bt bf c
-        NConfl (i1, i2) o -> NConfl (i1, i2) o
-        NSink i                -> NSink i
-    getNode i = (i,unsafeLookup i nodes)
-    getEnv i = unsafeLookup i envMap
-
 -- an analysis and a way to transform the cfg using that analysis
 data Optimization = forall a. Lat a =>
   Opt { optTransform  :: [Annotated a] -> [Stmt]
@@ -182,6 +145,3 @@ optimizeProg opts prog =
                        in  if prog' == prog then prog' else f prog'
         )
   in  fixpoint prog
-
--- optimizeProgram :: [Optimization] -> [Stmt] -> [Stmt]
--- optimizeProgram opts prog = cfgToProgram $ optimizeCfg opts (progToCfg prog)

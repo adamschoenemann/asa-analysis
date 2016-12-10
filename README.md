@@ -2,6 +2,10 @@
 # Analysis Framework
 For Automated Software Analysis at ITU 2016.
 
+## Code Organization
+`Anal.hs` contains the `Analysis` type and the `Optimization` type. These types
+serve as the entry points for new analysesa and optimizations.
+
 ## TODO:
 - Write report and presentation
 
