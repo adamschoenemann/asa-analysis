@@ -102,16 +102,16 @@ collectVars cfg =
   let vars = dfTraverseCFG cfg (\acc n -> acc `union` collectVars' n) S.empty
   in  M.fromList $ map (\v -> (v, CPBot)) $ S.toList vars where
   collectVars' node = case node of
-    NSource _              -> S.empty
-    NSingle single _ _       ->
+    NSource _          -> S.empty
+    NSingle single _ _ ->
       case single of
-        Skip -> S.empty
-        Ass v _ -> S.singleton v
+        Skip      -> S.empty
+        Ass v _   -> S.singleton v
         Output e  -> S.empty
-    NITE e _ _ _ _     -> S.empty
-    NWhile e _ _ _ _   -> S.empty
+    NITE e _ _ _ _    -> S.empty
+    NWhile e _ _ _ _  -> S.empty
     NConfl _ _        -> S.empty
-    NSink _                -> S.empty
+    NSink _           -> S.empty
 
 constProp :: Analysis Env
 constProp =
