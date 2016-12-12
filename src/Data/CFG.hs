@@ -22,7 +22,7 @@ type End = ID
 
 data Node
   = NSource Out
-  | NSingle SingleStmt In Out
+  | NSingle Stmt In Out
   | NITE Expr In BrTrue BrFalse End -- end of the conditional (points to confluence)
   | NWhile Expr In BrTrue BrFalse End -- end of the conditional (points to confluence)
   | NConfl (In, In) Out
@@ -70,9 +70,9 @@ cfgToGviz name (CFG m) =
 writeVizCfg :: CFG -> String -> IO ()
 writeVizCfg g name = writeFile ("./graphviz/" ++ name ++ ".dot") (cfgToGviz name g)
 
-progToCfg :: [Stmt] -> CFG
+progToCfg :: [SubProg] -> CFG
 progToCfg stmts =
-  let ((i, fn), assoc') = runState (cfgStmt 0 1 $ Block stmts) []
+  let ((i, fn), assoc') = runState (cfgSubProg 0 1 $ Block stmts) []
       (_, assoc)      = runState (fn (i+1)) assoc'
       graph = (0, NSource 1) : (assoc ++ [(i+1, NSink i)])
   in CFG $ M.fromList graph
@@ -84,20 +84,20 @@ progToCfg stmts =
 -- the result is the "requested" ID of the last node, and a function that
 -- given an ID j will create the last node of the sub-graph with j as its
 -- outgoing edge.
-cfgStmt :: In -> Int -> Stmt -> CFGState (End, Out -> CFGState ID)
-cfgStmt p i stmt = case stmt of
+cfgSubProg :: In -> Int -> SubProg -> CFGState (End, Out -> CFGState ID)
+cfgSubProg p i stmt = case stmt of
   Single Skip     -> return $ (i, \j -> newNode i $ NSingle Skip p j)
   Single (Ass v e ) -> return $ (i, \j -> newNode i $ NSingle (Ass v e) p j)
   Single (Output e) -> return $ (i, \j -> newNode i $ NSingle (Output e) p j)
   Block [] -> return $ (i, \j -> return i)
-  Block [s] -> cfgStmt p i s
+  Block [s] -> cfgSubProg p i s
   Block (s:ss) -> do
-    (j, b) <- cfgStmt p i s
+    (j, b) <- cfgSubProg p i s
     p <- b (succ j)
-    cfgStmt p (succ j) $ Block ss
+    cfgSubProg p (succ j) $ Block ss
   ITE e tr fl -> do
-    (trid, trb) <- cfgStmt i (i+1)    tr
-    (flid, flb) <- cfgStmt i (trid+1) fl
+    (trid, trb) <- cfgSubProg i (i+1)    tr
+    (flid, flb) <- cfgSubProg i (trid+1) fl
     _ <- newNode i $ NITE e (i-1) (i+1) (trid+1) (flid+1)
     let fun = \j -> newNode (flid+1) $ NConfl (trid, flid) j
     _ <- trb (flid + 1)
@@ -113,7 +113,7 @@ cfgStmt p i stmt = case stmt of
                    (flid+1)
     -}
   While e tr -> do
-    (trid, trb) <- cfgStmt (i+1) (i+2) tr -- create true branch
+    (trid, trb) <- cfgSubProg (i+1) (i+2) tr -- create true branch
     _ <- trb i -- make end of true branch point to confluence
     _ <- newNode i     $ NConfl (i-1, trid) (i+1) -- create confluence
     let fun = \j -> newNode (i+1) $ NWhile e i (i+2) (trid+1) i -- create conditional node
@@ -122,12 +122,12 @@ cfgStmt p i stmt = case stmt of
 newNode :: Int -> Node -> CFGState ID
 newNode i n = modify ((i,n):) >> return i
 
-cfgToProgram :: CFG -> [Stmt]
+cfgToProgram :: CFG -> [SubProg]
 cfgToProgram g@(CFG nodes) =
   let source = unsafeLookup 0 nodes
   in  fst $ nodeToProgram (0,source) g
 
-nodeToProgram :: (ID,Node) -> CFG -> ([Stmt], ID)
+nodeToProgram :: (ID,Node) -> CFG -> ([SubProg], ID)
 nodeToProgram n (CFG nodes) = help S.empty n proceed where
   getNode :: ID -> (ID, Node)
   getNode i = (i,unsafeLookup i nodes)
@@ -136,7 +136,7 @@ nodeToProgram n (CFG nodes) = help S.empty n proceed where
   stop   _ i next  = ([], i)
   stopIf j ex i next = if j == i then ([], i) else help ex (getNode next) (stopIf j)
 
-  help :: Set ID -> (ID, Node) -> (Set ID -> Int -> Int -> ([Stmt], ID)) -> ([Stmt], ID)
+  help :: Set ID -> (ID, Node) -> (Set ID -> Int -> Int -> ([SubProg], ID)) -> ([SubProg], ID)
   help ex (i, nd) handleConf
     | i `S.member` ex = ([], i)
     | otherwise =
@@ -153,18 +153,18 @@ nodeToProgram n (CFG nodes) = help S.empty n proceed where
     let (stmt', i) = help ex (getNode next) handleConf
     in  (stmt:stmt', i)
 
-  whileToProgram :: Set ID -> Expr -> In -> ID -> ID -> ([Stmt], ID)
+  whileToProgram :: Set ID -> Expr -> In -> ID -> ID -> ([SubProg], ID)
   whileToProgram ex b trid flid c =
     let (tr, _) = help ex (getNode trid) (stopIf c)
         (fl, i)   = help ex (getNode flid) stop
-    in (While b (stmtsToStmt tr) : fl, i)
+    in (While b (stmtsToSubProg tr) : fl, i)
 
-  iteToProgram :: Set ID -> Expr -> ID -> ID -> ID -> ([Stmt], ID)
+  iteToProgram :: Set ID -> Expr -> ID -> ID -> ID -> ([SubProg], ID)
   iteToProgram ex b trid flid c =
     let (tr,tcid)  = help ex (getNode trid) (stopIf c) -- (branch, true confluence id)
         (fl,fcid)  = help ex (getNode flid) (stopIf c) -- (brancid)
         continue =
-            let ite = ITE b (stmtsToStmt tr) (stmtsToStmt fl)
+            let ite = ITE b (stmtsToSubProg tr) (stmtsToSubProg fl)
                 (stmts, i) = help ex (getNode tcid) proceed
             in  (ite:stmts, i)
     in  assert (tcid /= fcid) ("confluence ids do not match. t: " ++ show tcid ++ ", f: " ++ show fcid) continue
@@ -191,7 +191,7 @@ dfTraverseCFG (CFG nodes) fn start =
 data DFAlg a =
   DFAlg { dfWhile  :: ID -> Expr -> a -> a -> a
         , dfITE    :: ID -> Expr -> a -> a -> a -> a
-        , dfNSingle :: ID -> SingleStmt -> a -> a
+        , dfNSingle :: ID -> Stmt -> a -> a
         }
 
 dfFoldCFGAlg :: DFAlg a -> CFG -> a -> a

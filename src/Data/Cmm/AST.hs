@@ -44,39 +44,39 @@ ppExpr expression = help 0 expression where
 instance Pretty Expr where
   ppr = ppExpr
 
-data SingleStmt
+data Stmt
   = Skip
   | Ass String Expr
   | Output Expr
   deriving (Eq, Ord, Show, Data, Typeable, Generic)
 
-instance Pretty SingleStmt where
+instance Pretty Stmt where
   ppr stmt =
     case stmt of
       Skip       -> "skip;"
       (Ass v e)  -> v ++ " := " ++ ppExpr e ++ ";"
       (Output e) -> "output " ++ ppExpr e ++ ";"
 
-data Stmt
-  = ITE Expr Stmt Stmt
-  | Block [Stmt]
-  | While Expr Stmt
-  | Single SingleStmt
+data SubProg
+  = ITE Expr SubProg SubProg
+  | Block [SubProg]
+  | While Expr SubProg
+  | Single Stmt
   deriving (Eq, Ord, Show, Data, Typeable, Generic)
 
-instance NFData Stmt where
+instance NFData SubProg where
 
-ppStmt :: Int -> Stmt -> String
-ppStmt n stmt =
+ppSubProg :: Int -> SubProg -> String
+ppSubProg n stmt =
   let indent i = replicate (i*2) ' '
   in case stmt of
     Single s    -> indent n ++ ppr s
     ITE e s1 s2 ->    indent n ++ "if " ++ ppExpr e ++ " then" ++ wsBlock s1
-                   ++ (trimBlock s1 $ ppStmt (incBlock s1 n) s1) ++ "\n" ++ indent n ++ "else" ++ wsBlock s2
-                   ++ (trimBlock s2 $ ppStmt (incBlock s2 n) s2)
-    Block stmts -> indent n ++ "{\n" ++ unlines (map (ppStmt (n+1)) stmts) ++ indent n ++ "}"
+                   ++ (trimBlock s1 $ ppSubProg (incBlock s1 n) s1) ++ "\n" ++ indent n ++ "else" ++ wsBlock s2
+                   ++ (trimBlock s2 $ ppSubProg (incBlock s2 n) s2)
+    Block stmts -> indent n ++ "{\n" ++ unlines (map (ppSubProg (n+1)) stmts) ++ indent n ++ "}"
     While e s  ->    indent n ++ "while " ++ ppExpr e ++ " do" ++ wsBlock s
-                  ++ (trimBlock s $ ppStmt (incBlock s n) s)
+                  ++ (trimBlock s $ ppSubProg (incBlock s n) s)
   where
     -- whitespace composition
     wsBlock (Block _) = " "
@@ -86,15 +86,15 @@ ppStmt n stmt =
     trimBlock (Block _) = trimHead
     trimBlock _         = id
 
-instance Pretty Stmt where
-  ppr = ppStmt 0
+instance Pretty SubProg where
+  ppr = ppSubProg 0
 
-ppStmts :: Int -> [Stmt] -> String
-ppStmts n = unlines . map (ppStmt n)
+ppSubProgs :: Int -> [SubProg] -> String
+ppSubProgs n = unlines . map (ppSubProg n)
 
-instance Pretty [Stmt] where
-  ppr = ppStmts 0
+instance Pretty [SubProg] where
+  ppr = ppSubProgs 0
 
-stmtsToStmt :: [Stmt] -> Stmt
-stmtsToStmt [x] = x
-stmtsToStmt xs  = Block xs
+stmtsToSubProg :: [SubProg] -> SubProg
+stmtsToSubProg [x] = x
+stmtsToSubProg xs  = Block xs

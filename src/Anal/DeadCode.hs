@@ -12,10 +12,10 @@ import Utils
 import Anal
 import Data.Cmm.Annotated
 
-deadCodeTransAnn :: [Annotated a] -> [Stmt]
+deadCodeTransAnn :: [Annotated a] -> [SubProg]
 deadCodeTransAnn = deadCodeTrans . annotatedToProg
 
-deadCodeTrans :: [Stmt] -> [Stmt]
+deadCodeTrans :: [SubProg] -> [SubProg]
 deadCodeTrans ss = foldr dct [] ss where
   dct stmt acc =
     case stmt of
@@ -31,11 +31,11 @@ deadCodeTrans ss = foldr dct [] ss where
           BLit True  -> While e s : acc
           BLit False -> acc
           _          -> While e (s2s $ dct s []) : acc
-  s2s = stmtsToStmt
+  s2s = stmtsToSubProg
 
 deadCodeOpt :: Optimization
 deadCodeOpt =
-  Opt { optTransform  = deadCodeTransAnn :: [Annotated UnitLat] -> [Stmt]
+  Opt { optTransform  = deadCodeTransAnn :: [Annotated UnitLat] -> [SubProg]
       , optAnalysis   = idAnalysis
       }
 

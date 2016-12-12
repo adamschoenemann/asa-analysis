@@ -44,7 +44,7 @@ backwards sinkEnv node envs =
   where getEnv k = unsafeLookup k envs
 
 data Analysis a
-  = Analysis { singleToTFun :: SingleStmt -> TFun a
+  = Analysis { singleToTFun :: Stmt -> TFun a
              , condToTFun :: Expr -> TFun a
              , initialEnv :: CFG -> a
              , getDeps    :: Node -> Map ID a -> a
@@ -101,24 +101,24 @@ analyzeCFG anal cfg@(CFG nodes) = solveFix initial bigT where
   bigT = eqsToBigT eqs
   initial = M.map (const initialL) nodes
 
-analyzeProg :: Lat a => Analysis a -> [Stmt] -> Map ID a
+analyzeProg :: Lat a => Analysis a -> [SubProg] -> Map ID a
 analyzeProg anal prog = analyzeCFG anal (progToCfg prog)
 
-pprintAnalysis :: (Lat a, Pretty a) => Analysis a -> [Stmt] -> IO ()
+pprintAnalysis :: (Lat a, Pretty a) => Analysis a -> [SubProg] -> IO ()
 pprintAnalysis anal = mapM_ (\(i, r) -> putStrLn $ (show i ++ ": " ++ ppr r)) .
                         M.toList . analyzeProg anal
 
-printAnalysis :: (Lat a, Show a) => Analysis a -> [Stmt] -> IO ()
+printAnalysis :: (Lat a, Show a) => Analysis a -> [SubProg] -> IO ()
 printAnalysis anal = mapM_ (\(i, r) -> putStrLn $ (show i ++ ": " ++ show r)) .
                         M.toList . analyzeProg anal
 
 -- an analysis and a way to transform the cfg using that analysis
 data Optimization = forall a. Lat a =>
-  Opt { optTransform  :: [Annotated a] -> [Stmt]
+  Opt { optTransform  :: [Annotated a] -> [SubProg]
       , optAnalysis   :: Analysis  a
       }
 
-runOpt :: Optimization -> [Stmt] -> [Stmt]
+runOpt :: Optimization -> [SubProg] -> [SubProg]
 runOpt (Opt trans anal) prog =
   let cfg      = progToCfg prog
       analyzed = analyzeCFG anal cfg
@@ -127,18 +127,18 @@ runOpt (Opt trans anal) prog =
   in optimized
 
 -- run optb first and then opt a
-runOpts :: Optimization -> Optimization -> [Stmt] -> [Stmt]
+runOpts :: Optimization -> Optimization -> [SubProg] -> [SubProg]
 runOpts opta optb prog =
   let prog'  = runOpt optb prog
   in  runOpt opta prog'
 
-seqOpts :: [Optimization] -> ([Stmt] -> [Stmt])
+seqOpts :: [Optimization] -> ([SubProg] -> [SubProg])
 seqOpts [] = id
 seqOpts [opt] = runOpt opt
 seqOpts (o:os) = foldr (\opt fn -> fn . runOpt opt) (runOpt o) os
 
 
-optimizeProg :: [Optimization] -> [Stmt] -> [Stmt]
+optimizeProg :: [Optimization] -> [SubProg] -> [SubProg]
 optimizeProg opts prog =
   let fixpoint =
         fix (\f prog -> let prog' = seqOpts opts prog

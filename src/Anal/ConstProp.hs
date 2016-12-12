@@ -50,7 +50,7 @@ instance Pretty Env where
 getVar :: String -> Env -> CPLat
 getVar n env = maybe CPBot id $ M.lookup n env
 
-cpSingleToTFun :: SingleStmt -> TFun Env
+cpSingleToTFun :: Stmt -> TFun Env
 cpSingleToTFun stmt = case stmt of
   Skip     -> id
   Ass v e  -> \env -> M.insert v (evalExpr e env) env
@@ -115,9 +115,9 @@ collectVars cfg =
 
 constProp :: Analysis Env
 constProp =
-  Analysis { singleToTFun = cpSingleToTFun -- :: Stmt -> TFun
+  Analysis { singleToTFun = cpSingleToTFun -- :: SubProg -> TFun
            , condToTFun = \e -> id
-           , initialEnv = cpInitial -- :: [Stmt] -> Set Expr
+           , initialEnv = cpInitial -- :: [SubProg] -> Set Expr
            , getDeps = forward (M.empty)
            }
 
@@ -142,9 +142,9 @@ cpLatEqCombine (CPBool _) (CPInt _)   = error "type error"
 cpLatEqCombine a b                    = cpLUP a b
 
 
-cpTransform :: [Annotated Env] -> [Stmt]
+cpTransform :: [Annotated Env] -> [SubProg]
 cpTransform anns = map (mapAnn stmt) anns where
-  stmt :: Env -> Stmt -> Stmt
+  stmt :: Env -> SubProg -> SubProg
   stmt env st = case st of
     Single (Skip    ) -> Single Skip
     Single (Ass v e ) -> Single $ Ass v (expr env e)

@@ -14,10 +14,10 @@ import Data.Functor ((<$>))
 import Control.Applicative ((<*>),(<*),(*>))
 import Utils
 
-program :: Parser [Stmt]
+program :: Parser [SubProg]
 program = spaces *> many (stmt <* spaces)
 
-stmt :: Parser Stmt
+stmt :: Parser SubProg
 stmt =  (const $ Single Skip) <$> trystring "skip" <* spaces <* char ';' <* spaces
     <|> ITE <$> (trystring "if" *> spaces1 *> expr) <*>
                      (trystring "then" *> spaces1 *> stmt <* spaces) <*>
@@ -65,8 +65,8 @@ brackets x = between (char '{' <* spaces) (char '}') (x <* spaces)
 ident :: Parser String
 ident  = (:) <$> letter <*> many alphaNum
 
-unsafeParse :: String -> [Stmt]
+unsafeParse :: String -> [SubProg]
 unsafeParse p = either (error . show) id $ parse program "unsafe" p
 
-parseCmm :: String -> Either ParseError [Stmt]
+parseCmm :: String -> Either ParseError [SubProg]
 parseCmm p = parse program "cmm" p

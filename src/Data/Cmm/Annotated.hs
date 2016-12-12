@@ -9,7 +9,7 @@ import Data.Map.Strict (Map)
 import Utils
 
 
-data Annotated a = ASingle a SingleStmt
+data Annotated a = ASingle a Stmt
                  | AITE a Expr (Annotated a) (Annotated a)
                  | AWhile a Expr (Annotated a)
                  | ABlock [Annotated a]
@@ -18,14 +18,14 @@ data Annotated a = ASingle a SingleStmt
 -- a is the annotated's type param
 -- b is the type of the accumulator
 data AnnAlg a b = AnnAlg
-  { aaStmt  :: a -> SingleStmt -> b -> b
+  { aaSubProg  :: a -> Stmt -> b -> b
   , aaITE   :: a -> Expr -> b -> b -> b -> b
   , aaWhile :: a -> Expr -> b -> b -> b
   , aaBlock :: [b] -> b -> b
   }
 
 -- foldr :: (a -> b -> a) -> b -> [a] -> b
-mapAnn :: (a -> Stmt -> Stmt) -> Annotated a -> Stmt
+mapAnn :: (a -> SubProg -> SubProg) -> Annotated a -> SubProg
 mapAnn fn ann = help ann where
   help ann = case ann of
     ASingle a s    -> fn a (Single s)
@@ -42,7 +42,7 @@ foldAnn (AnnAlg stmt ite while block) seed annotated = help annotated seed where
       AWhile a e bt  -> while a e (help bt seed) acc
       ABlock as      -> block (map (flip help $ seed) as) acc
 
-annotatedToProg :: [Annotated a] -> [Stmt]
+annotatedToProg :: [Annotated a] -> [SubProg]
 annotatedToProg = map help where
   help ann = s2s $ foldAnn alg [] ann
   alg = AnnAlg stmt ite while block
@@ -50,9 +50,9 @@ annotatedToProg = map help where
   ite _ e bt bf acc = ITE e (s2s bt) (s2s bf) : acc
   while _ e bt acc  = While e (s2s bt) : acc
   block bs acc      = s2s (concat bs) : acc
-  s2s = stmtsToStmt
+  s2s = stmtsToSubProg
 
--- annotatedToProg' :: [Annotated a] -> [Stmt]
+-- annotatedToProg' :: [Annotated a] -> [SubProg]
 -- annotatedToProg' anns = map help anns where
 --   help ann =
 --     case ann of

@@ -17,7 +17,7 @@ instance Lat LiveEnv where
 instance Pretty LiveEnv where
   ppr = show
 
-liveSingleToTFun :: SingleStmt -> TFun LiveEnv
+liveSingleToTFun :: Stmt -> TFun LiveEnv
 liveSingleToTFun stmt = case stmt of
     Skip     -> id
     Ass v e  -> union (vars e) . delete v

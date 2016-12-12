@@ -47,7 +47,7 @@ unavail var l  = l \\ S.filter (occursIn var) l where
 assign :: String -> Expr -> Set Expr -> Set Expr
 assign v e  = avail e . unavail v
 
-availSingleToTFun :: SingleStmt -> TFun (Set Expr)
+availSingleToTFun :: Stmt -> TFun (Set Expr)
 availSingleToTFun stmt = case stmt of
   Skip     -> id
   Ass v e  -> assign v e
@@ -73,7 +73,7 @@ instance Lat (Set Expr) where
 
 available :: Analysis (Set Expr)
 available =
-  Analysis { singleToTFun = availSingleToTFun -- :: Stmt -> TFun
+  Analysis { singleToTFun = availSingleToTFun -- :: SubProg -> TFun
            , condToTFun = avail
            , initialEnv = collectExprs
            , getDeps = forward S.empty
