@@ -7,6 +7,7 @@ import Data.Set (Set, union, (\\))
 import qualified Data.Set as S
 import Anal
 import Data.Cmm.AST
+import Data.CFG
 import Text.Pretty
 import Data.List (intercalate)
 
@@ -40,11 +41,20 @@ unavail var l  = l \\ S.filter (occursIn var) l where
     Eq  e1 e2 -> occursIn v e1 || occursIn v e2
     ILit _  -> False
     BLit _  -> False
-    Var s     -> s == v
-    Input     -> False
+    Var s   -> s == v
+    Input   -> False
 
 assign :: String -> Expr -> Set Expr -> Set Expr
 assign v e  = avail e . unavail v
+
+availNodeToTFun :: Node -> TFun (Set Expr)
+availNodeToTFun node = case node of
+  NSingle stmt _ _ -> availSingleToTFun stmt
+  NSource _        -> id
+  NSink   _        -> id
+  NITE   e _ _ _ _ -> avail e
+  NWhile e _ _ _ _ -> avail e
+  NConfl _ _       -> id
 
 availSingleToTFun :: Stmt -> TFun (Set Expr)
 availSingleToTFun stmt = case stmt of
@@ -59,8 +69,7 @@ instance Lat (Set Expr) where
 
 available :: Analysis (Set Expr)
 available =
-  Analysis { singleToTFun = availSingleToTFun -- :: SubProg -> TFun
-           , condToTFun = avail
+  Analysis { nodeToTFun = availNodeToTFun
            , getDeps = forward S.empty
            }
 

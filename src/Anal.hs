@@ -35,24 +35,22 @@ forward srcEnv node envs =
 backwards :: Lat a => a -> Node -> Map ID a -> a
 backwards sinkEnv node envs =
   case node of
-      NSource o              -> getEnv o
-      NSingle stmt i o       -> getEnv o
-      NITE e i bt bf _       -> leastUpperBound (getEnv bt) (getEnv bf)
-      NWhile e i bt bf _     -> leastUpperBound (getEnv bt) (getEnv bf)
-      NConfl (i1, i2) o      -> getEnv o
-      NSink i                -> sinkEnv
+      NSource o          -> getEnv o
+      NSingle stmt i o   -> getEnv o
+      NITE e i bt bf _   -> leastUpperBound (getEnv bt) (getEnv bf)
+      NWhile e i bt bf _ -> leastUpperBound (getEnv bt) (getEnv bf)
+      NConfl (i1, i2) o  -> getEnv o
+      NSink i            -> sinkEnv
   where getEnv k = unsafeLookup k envs
 
 data Analysis a
-  = Analysis { singleToTFun :: Stmt -> TFun a
-             , condToTFun :: Expr -> TFun a
+  = Analysis { nodeToTFun :: Node -> TFun a
              , getDeps    :: Node -> Map ID a -> a
              }
 
 idAnalysis :: Lat a => a -> Analysis a
 idAnalysis srcEnv =
-  Analysis { singleToTFun = const id
-           , condToTFun = const id
+  Analysis { nodeToTFun = const id
            , getDeps    = forward srcEnv
            }
 
@@ -60,13 +58,7 @@ cfgToEqs :: Lat a => Analysis a -> CFG -> Map ID (Equation a)
 cfgToEqs anal (CFG nodes) = M.mapWithKey nodeToEq nodes where
   nodeToEq k node prev =
     let dep = (getDeps anal) node prev
-    in case node of
-      NSource o           -> dep
-      NSingle stmt i o    -> (singleToTFun anal $ stmt) dep
-      NITE e i bt bf _    -> (condToTFun anal $ e)    dep
-      NWhile e i bt bf _  -> (condToTFun anal $ e)    dep
-      NConfl (i1, i2) o   -> dep
-      NSink i             -> dep
+    in  (nodeToTFun anal node) dep
 
 type BigT a = Map ID a -> Map ID a
 

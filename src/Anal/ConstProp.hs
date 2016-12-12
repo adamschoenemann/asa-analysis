@@ -8,10 +8,9 @@ import Data.CFG
 import Text.Pretty
 import Data.Map.Strict (Map)
 import qualified Data.Map.Strict as M
-import Data.Set (union)
-import qualified Data.Set as S
 import Data.Cmm.Annotated
 import Control.DeepSeq
+import qualified Data.Set as S
 
 data CPLat
   = CPTop
@@ -51,6 +50,15 @@ instance Pretty Env where
 
 getVar :: String -> Env -> CPLat
 getVar n env = maybe CPBot id $ M.lookup n env
+
+cpNodeToTFun :: Node -> TFun Env
+cpNodeToTFun node = case node of
+  NSingle stmt _ _  -> cpSingleToTFun stmt
+  NITE   e _ _ _ _  -> id
+  NWhile e _ _ _ _  -> id
+  NSource _         -> id
+  NConfl  _ _       -> id
+  NSink   _         -> id
 
 cpSingleToTFun :: Stmt -> TFun Env
 cpSingleToTFun stmt = case stmt of
@@ -98,8 +106,7 @@ envLUP = M.intersectionWith cpLUP
 
 constProp :: Analysis Env
 constProp =
-  Analysis { singleToTFun = cpSingleToTFun -- :: SubProg -> TFun
-           , condToTFun = \e -> id
+  Analysis { nodeToTFun = cpNodeToTFun
            , getDeps = forward (M.empty)
            }
 

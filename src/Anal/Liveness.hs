@@ -18,18 +18,22 @@ instance Lat LiveEnv where
 instance Pretty LiveEnv where
   ppr = show
 
-liveSingleToTFun :: Stmt -> TFun LiveEnv
-liveSingleToTFun stmt = case stmt of
-    Skip     -> id
-    Ass v e  -> union (vars e) . delete v
-    Output e -> union (vars e)
+liveNodeToTFun :: Node -> TFun LiveEnv
+liveNodeToTFun node = case node of
+    NSource _ -> id
+    NSink   _ -> id
+    NSingle stmt _ _ ->
+      case stmt of
+        Skip     -> id
+        Ass v e  -> union (vars e) . delete v
+        Output e -> union (vars e)
+    NITE   e _ _ _ _ -> exprToTFun e
+    NWhile e _ _ _ _ -> exprToTFun e
+    NConfl _ _       -> id
   where
+    exprToTFun e = LEnv . S.union (unLive . vars $ e) . unLive
     union e = LEnv . S.union (unLive e) . unLive
     delete v = LEnv . S.delete v . unLive
-
-
-liveExprToTFun :: Expr -> TFun LiveEnv
-liveExprToTFun e = LEnv . S.union (unLive . vars $ e) . unLive
 
 vars :: Expr -> LiveEnv
 vars = LEnv . help where
@@ -49,7 +53,6 @@ vars = LEnv . help where
 
 livenessAnal :: Analysis LiveEnv
 livenessAnal =
-  Analysis { singleToTFun = liveSingleToTFun
-           , condToTFun = liveExprToTFun
+  Analysis { nodeToTFun = liveNodeToTFun
            , getDeps    = backwards (LEnv S.empty)
            }
