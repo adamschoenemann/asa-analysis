@@ -14,7 +14,7 @@ import Data.Cmm.Annotated
 main :: IO ()
 main = hspec spec
 
-cfgs :: [(String,(CFG,[Stmt]))]
+cfgs :: [(String,(CFG,Program))]
 cfgs = map (\(n,p) -> (n, either (error "parse error") (\prg -> (progToCfg prg, prg)) $ parse program n p)) testPrograms
 
 spec :: Spec

@@ -63,12 +63,12 @@ cfgToEqs anal (CFG nodes) = M.mapWithKey nodeToEq nodes where
   nodeToEq k node prev =
     let dep = (getDeps anal) node prev
     in case node of
-      NSource o              -> dep
-      NSingle stmt i o       -> (singleToTFun anal $ stmt) dep
-      NITE e i bt bf _   -> (condToTFun anal $ e)    dep
-      NWhile e i bt bf _ -> (condToTFun anal $ e)    dep
-      NConfl (i1, i2) o -> dep
-      NSink i                -> dep
+      NSource o           -> dep
+      NSingle stmt i o    -> (singleToTFun anal $ stmt) dep
+      NITE e i bt bf _    -> (condToTFun anal $ e)    dep
+      NWhile e i bt bf _  -> (condToTFun anal $ e)    dep
+      NConfl (i1, i2) o   -> dep
+      NSink i             -> dep
 
 type BigT a = Map ID a -> Map ID a
 

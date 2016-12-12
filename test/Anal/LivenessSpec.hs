@@ -11,7 +11,7 @@ import Anal
 main :: IO ()
 main = hspec spec
 
-parsed :: [(String,[Stmt])]
+parsed :: [(String,Program)]
 parsed = map (\(n,p) -> (n, either (error "parse error") (id) $ parse program n p)) testPrograms
 
 spec :: Spec

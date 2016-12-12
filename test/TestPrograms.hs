@@ -4,6 +4,8 @@ module TestPrograms where
 
 import NeatInterpolation
 import Text.Regex
+import Data.Cmm.QuasiQuoter
+import Data.Cmm.AST
 
 in1, in2, in3, in4, in5, in6, in7, in8, in9, in10, in11, in12, in13 :: String
 
@@ -186,4 +188,18 @@ testPrograms =
                ]
       rgx = mkRegex "(\r\n)|\r|\n"
   in  map (\(n,p) -> (n, subRegex rgx p "\n")) progs
+
+
+
+p10 :: Program
+p10 =
+  [cmm|
+    x := 0;
+    y := 2;
+    while x < 10 do {
+      x := x + 1;
+      y := y * y;
+    }
+    output y;
+  |]
 

@@ -16,7 +16,7 @@ main = hspec spec
 opts :: [(String, Optimization)]
 opts = [("Dead Code Elim", deadCodeOpt), ("Const Prop", constPropOpt)]
 
-progs :: [(String,[Stmt])]
+progs :: [(String,Program)]
 progs = map (\(n,p) -> (n, either (error "parse error") id $ parse program n p)) testPrograms
 
 spec :: Spec
