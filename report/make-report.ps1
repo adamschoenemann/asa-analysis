@@ -1,0 +1,1 @@
+pandoc .\report.tex -o .\report.pdf --latex-engine=xelatex -V geometry:margin=1in -N

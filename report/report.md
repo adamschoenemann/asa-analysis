@@ -18,7 +18,7 @@ In order to to analyze a program, one needs a concrete representation of that pr
 as data. The program we'll be analysing in this report, is the simple program called
 C--.
 The syntax for C-- is defined by the following grammar:
-![c--](./imgs/c--.jpg)
+![c--](./imgs/cmm.jpg)
 
 In Haskell, we can use Algebraic Datatypes to model this grammar:
 ```Haskell
