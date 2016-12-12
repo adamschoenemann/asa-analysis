@@ -23,8 +23,9 @@ data CPLat
 instance NFData CPLat where
 
 instance Lat CPLat where
-  bottom = CPBot
+  bottom = const CPBot
   leastUpperBound = cpLUP
+  top    = const CPTop
 
 cpLUP :: CPLat -> CPLat -> CPLat
 cpLUP CPTop _  = CPTop
@@ -41,8 +42,9 @@ instance Pretty CPLat where
 type Env = Map String CPLat
 
 instance Lat Env where
-  bottom = M.empty
+  bottom = M.fromList . S.toList . S.map (\v -> (v, CPBot)) . collectVars
   leastUpperBound = envLUP
+  top = const M.empty
 
 instance Pretty Env where
   ppr = show
@@ -91,33 +93,13 @@ evalExpr e env = case e of
     eq   = latOp $ CPBool . either (uncurry (==)) (uncurry (==))
     invalid = error "invalid expression encountered"
 
-cpInitial :: CFG -> Env
-cpInitial = collectVars
-
 envLUP :: Env -> Env -> Env
 envLUP = M.intersectionWith cpLUP
-
-collectVars :: CFG -> Env
-collectVars cfg =
-  let vars = dfTraverseCFG cfg (\acc n -> acc `union` collectVars' n) S.empty
-  in  M.fromList $ map (\v -> (v, CPBot)) $ S.toList vars where
-  collectVars' node = case node of
-    NSource _          -> S.empty
-    NSingle single _ _ ->
-      case single of
-        Skip      -> S.empty
-        Ass v _   -> S.singleton v
-        Output e  -> S.empty
-    NITE e _ _ _ _    -> S.empty
-    NWhile e _ _ _ _  -> S.empty
-    NConfl _ _        -> S.empty
-    NSink _           -> S.empty
 
 constProp :: Analysis Env
 constProp =
   Analysis { singleToTFun = cpSingleToTFun -- :: SubProg -> TFun
            , condToTFun = \e -> id
-           , initialEnv = cpInitial -- :: Program -> Set Expr
            , getDeps = forward (M.empty)
            }
 

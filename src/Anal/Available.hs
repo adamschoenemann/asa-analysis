@@ -7,7 +7,6 @@ import Data.Set (Set, union, (\\))
 import qualified Data.Set as S
 import Anal
 import Data.Cmm.AST
-import Data.CFG
 import Text.Pretty
 import Data.List (intercalate)
 
@@ -53,28 +52,27 @@ availSingleToTFun stmt = case stmt of
   Ass v e  -> assign v e
   Output e -> avail e
 
-collectExprs :: CFG -> Set Expr
-collectExprs cfg = dfTraverseCFG cfg (\acc n -> acc `union` collectExprs' n) S.empty where
-  collectExprs' node = case node of
-    NSource _              -> S.empty
-    NSingle single _ _       ->
-      case single of
-        Skip     -> S.empty
-        Ass _ e  -> exprs e
-        Output e -> exprs e
-    NITE e _ _ _ _     -> exprs e
-    NWhile e _ _ _ _   -> exprs e
-    NConfl _ _        -> S.empty
-    NSink _                -> S.empty
-
 instance Lat (Set Expr) where
-  bottom = S.empty -- actually, this is top
+  bottom = collectExprs
   leastUpperBound = S.intersection
+  top    = const S.empty
 
 available :: Analysis (Set Expr)
 available =
   Analysis { singleToTFun = availSingleToTFun -- :: SubProg -> TFun
            , condToTFun = avail
-           , initialEnv = collectExprs
            , getDeps = forward S.empty
            }
+
+collectExprs :: Program -> Set Expr
+collectExprs prog = foldr (\x acc -> help x `union` acc) (S.empty) prog where
+  help subprog =
+    case subprog of
+      Single single ->
+        case single of
+          Skip      -> S.empty
+          Ass _ e   -> exprs e
+          Output e  -> exprs e
+      ITE e bt bf   -> exprs e `union` help bt `union` help bf
+      While e bt    -> exprs e `union` help bt
+      Block subps   -> collectExprs subps

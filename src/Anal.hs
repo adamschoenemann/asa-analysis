@@ -24,12 +24,12 @@ type Equation a = Map ID a -> a
 forward :: Lat a => a -> Node -> Map ID a -> a
 forward srcEnv node envs =
   case node of
-      NSource o              -> srcEnv
-      NSingle stmt i o       -> getEnv i
+      NSource o          -> srcEnv
+      NSingle stmt i o   -> getEnv i
       NITE e i bt bf _   -> getEnv i
       NWhile e i bt bf _ -> getEnv i
-      NConfl (i1, i2) o -> leastUpperBound (getEnv i1) (getEnv i2)
-      NSink i                -> getEnv i
+      NConfl (i1, i2) o  -> leastUpperBound (getEnv i1) (getEnv i2)
+      NSink i            -> getEnv i
   where getEnv k = unsafeLookup k envs
 
 backwards :: Lat a => a -> Node -> Map ID a -> a
@@ -37,25 +37,23 @@ backwards sinkEnv node envs =
   case node of
       NSource o              -> getEnv o
       NSingle stmt i o       -> getEnv o
-      NITE e i bt bf _   -> leastUpperBound (getEnv bt) (getEnv bf)
-      NWhile e i bt bf _ -> leastUpperBound (getEnv bt) (getEnv bf)
-      NConfl (i1, i2) o -> getEnv o
+      NITE e i bt bf _       -> leastUpperBound (getEnv bt) (getEnv bf)
+      NWhile e i bt bf _     -> leastUpperBound (getEnv bt) (getEnv bf)
+      NConfl (i1, i2) o      -> getEnv o
       NSink i                -> sinkEnv
   where getEnv k = unsafeLookup k envs
 
 data Analysis a
   = Analysis { singleToTFun :: Stmt -> TFun a
              , condToTFun :: Expr -> TFun a
-             , initialEnv :: CFG -> a
              , getDeps    :: Node -> Map ID a -> a
              }
 
-idAnalysis :: Lat a => Analysis a
-idAnalysis =
+idAnalysis :: Lat a => a -> Analysis a
+idAnalysis srcEnv =
   Analysis { singleToTFun = const id
            , condToTFun = const id
-           , initialEnv = const bottom
-           , getDeps    = forward bottom
+           , getDeps    = forward srcEnv
            }
 
 cfgToEqs :: Lat a => Analysis a -> CFG -> Map ID (Equation a)
@@ -94,15 +92,15 @@ solveFix' = fix (\f l bigT ->
                     in if (l == l') then l else f l' bigT
                 )
 
-analyzeCFG :: Lat a => Analysis a -> CFG -> Map ID a
-analyzeCFG anal cfg@(CFG nodes) = solveFix initial bigT where
-  initialL = (initialEnv anal) cfg
+
+analyzeProg :: Lat a => Analysis a -> Program -> Map ID a
+analyzeProg anal prog = solveFix initial bigT where
+  cfg@(CFG nodes) = progToCfg prog
+  initialL = bottom prog
   eqs = cfgToEqs anal cfg
   bigT = eqsToBigT eqs
   initial = M.map (const initialL) nodes
 
-analyzeProg :: Lat a => Analysis a -> Program -> Map ID a
-analyzeProg anal prog = analyzeCFG anal (progToCfg prog)
 
 pprintAnalysis :: (Lat a, Pretty a) => Analysis a -> Program -> IO ()
 pprintAnalysis anal = mapM_ (\(i, r) -> putStrLn $ (show i ++ ": " ++ ppr r)) .
@@ -121,7 +119,7 @@ data Optimization = forall a. Lat a =>
 runOpt :: Optimization -> Program -> Program
 runOpt (Opt trans anal) prog =
   let cfg      = progToCfg prog
-      analyzed = analyzeCFG anal cfg
+      analyzed = analyzeProg anal prog
       annotated = cfgToAnnotated analyzed cfg
       optimized = trans annotated
   in optimized

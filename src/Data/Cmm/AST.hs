@@ -8,6 +8,8 @@ import Data.Typeable
 import Data.Data
 import Control.DeepSeq
 import GHC.Generics (Generic)
+import Data.Set (Set, union)
+import qualified Data.Set as S
 
 data Expr
   = Add Expr Expr
@@ -100,3 +102,21 @@ instance Pretty Program where
 stmtsToSubProg :: Program -> SubProg
 stmtsToSubProg [x] = x
 stmtsToSubProg xs  = Block xs
+
+-- FIXME: Should we collect all variables also mentioned in expressions?
+--        or just the ones that are assigned?
+collectVars :: Program -> Set String
+collectVars prog = foldr (\x acc -> help x `union` acc) S.empty prog where
+  help subprog =
+    case subprog of
+      Single single ->
+        case single of
+          Skip      -> S.empty
+          Ass v _   -> S.singleton v
+          Output e  -> S.empty
+      ITE e bt bf   -> help bt `union` help bf
+      While e bt    -> help bt
+      Block subps   -> collectVars subps
+
+
+

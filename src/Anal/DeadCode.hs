@@ -36,7 +36,7 @@ deadCodeTrans ss = foldr dct [] ss where
 deadCodeOpt :: Optimization
 deadCodeOpt =
   Opt { optTransform  = deadCodeTransAnn :: [Annotated UnitLat] -> Program
-      , optAnalysis   = idAnalysis
+      , optAnalysis   = idAnalysis UnitLat
       }
 
 -- this elimination works directly on the control-flow graph.

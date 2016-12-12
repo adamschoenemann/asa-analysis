@@ -164,26 +164,62 @@ analyses. To do this, we have defined some typeclasses and datatypes that allows
 users of the framework to define their own analyses declaratively.
 
 ### The Lattice
-Central to any analysis the type of lattice that is used. To generalise this
-notion, we have defined a lattice typeclass called `Lat`.
+Central to any analysis the type of lattice that is used. Formally, a lattice
+is a **partial order** with an operation $⊔S$ (called *join* or *least upper bound*) that exists for all subsets 
+$S ⊆ L$. For finite lattices (which we are interested in, only), $⊔$ need
+only be defined for each **pair** of elements in $S$.
+
+A partial order is defined as a structure $(S, ⊑)$ where $S$ is a set and $⊑$ is a 
+binary relation on $S$ that satisfies:
+
+- Reflexivity: $∀x ∈ S.\; x ⊑ x$
+- Transitivity: $∀x,y,z ∈ S.\;  x ⊑ y ∧ y ⊑ z ⇒ x ⊑ z$
+- Anti-Symmetry: $∀x,y ∈ S.\; x ⊑ y ∧ y ⊑ x ⇒ x = y$
+
+To generalise this notion, we have defined a lattice typeclass called `Lat`.
 
 ```Haskell
 class (Ord a, Eq a, Show a) => Lat a where
-  bottom :: a
+  bottom          :: Program -> a
   leastUpperBound :: a -> a -> a
+  top             :: Program -> a
 
 -- the simplest lattice possible (one-element lattice)
 data UnitLat = UnitLat deriving (Ord, Eq, Show)
 
 instance Lat UnitLat where
-  bottom = UnitLat
+  bottom              = const UnitLat
   leastUpperBound _ _ = UnitLat
+  top                 = const UnitLat
 ```
+To make a datatype an instance of the `Lat` typeclass, the programmer will have
+to define the `top`, `bottom` and `leastUpperBound` functions. The `top` and `bottom`
+functions take a program as input, in order to dynamically generate the top
+and bottom elements specific to that program. The constraints `Ord a` and `Eq a`
+on the typeclass definition makes sure that a partial order is defined for the type
+parameter `a` before you can instance it as a lattice.
+
+### The Analysis Type
+An analysis is represented as a concrete record, whose arguments are functions
+that represent the transfer functions associated with the specific analysis.
+
+```Haskell
+data Analysis a
+  = Analysis { singleToTFun :: Stmt -> TFun a
+             , condToTFun :: Expr -> TFun a
+             , getDeps    :: Node -> Map ID a -> a
+             }
+```
+To construct a new analysis, you must provide a function that creates a 
+transfer function from a single statement, and a transfer function from a 
+conditional, as well as a function that specifies how to resolve the dependencies
+of the program-points.
+
 
 ### Program-Points
 After constructing the CFG of a program, one would generate program-points
 from this CFG. The program-points represent the result of the analysis at a 
-specific point the execution of the program. A program-point has an associated
+specific point of the execution of the program. A program-point has an associated
 transfer-function that, given an "environment lattice" that represents the
 result of the analysis at a previous program-point, updates the result to reflect
 the effect of the statement at the current program-point.

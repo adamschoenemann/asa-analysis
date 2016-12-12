@@ -12,7 +12,8 @@ newtype LiveEnv = LEnv { unLive :: (Set String) } deriving (Ord, Eq, Show)
 
 instance Lat LiveEnv where
   leastUpperBound (LEnv a) (LEnv b) = LEnv $ S.union a b
-  bottom = LEnv S.empty
+  bottom = const (LEnv S.empty)
+  top    = LEnv . collectVars
 
 instance Pretty LiveEnv where
   ppr = show
@@ -45,13 +46,10 @@ vars = LEnv . help where
       Var n     -> S.singleton n
       Input     -> S.empty
 
-liveInitial :: CFG -> LiveEnv
-liveInitial = const (LEnv S.empty)
 
 livenessAnal :: Analysis LiveEnv
 livenessAnal =
   Analysis { singleToTFun = liveSingleToTFun
            , condToTFun = liveExprToTFun
-           , initialEnv = liveInitial
            , getDeps    = backwards (LEnv S.empty)
            }
