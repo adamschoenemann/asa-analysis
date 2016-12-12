@@ -102,7 +102,7 @@ printAnalysis :: (Lat a, Show a) => Analysis a -> Program -> IO ()
 printAnalysis anal = mapM_ (\(i, r) -> putStrLn $ (show i ++ ": " ++ show r)) .
                         M.toList . analyzeProg anal
 
--- an analysis and a way to transform the cfg using that analysis
+-- an analysis and a way to transform the AST using that analysis
 data Optimization = forall a. Lat a =>
   Opt { optTransform  :: [Annotated a] -> Program
       , optAnalysis   :: Analysis  a

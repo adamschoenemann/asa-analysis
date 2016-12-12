@@ -53,18 +53,17 @@ getVar n env = maybe CPBot id $ M.lookup n env
 
 cpNodeToTFun :: Node -> TFun Env
 cpNodeToTFun node = case node of
-  NSingle stmt _ _  -> cpSingleToTFun stmt
-  NITE   e _ _ _ _  -> id
-  NWhile e _ _ _ _  -> id
-  NSource _         -> id
-  NConfl  _ _       -> id
-  NSink   _         -> id
-
-cpSingleToTFun :: Stmt -> TFun Env
-cpSingleToTFun stmt = case stmt of
-  Skip     -> id
-  Ass v e  -> \env -> M.insert v (evalExpr e env) env
-  Output _ -> id
+    NSingle stmt _ _  -> cpSingleToTFun stmt
+    NITE   e _ _ _ _  -> id
+    NWhile e _ _ _ _  -> id
+    NSource _         -> id
+    NConfl  _ _       -> id
+    NSink   _         -> id
+  where
+    cpSingleToTFun stmt = case stmt of
+      Skip     -> id
+      Ass v e  -> \env -> M.insert v (evalExpr e env) env
+      Output _ -> id
 
 evalExpr :: Expr -> Env -> CPLat
 evalExpr e env = case e of
@@ -132,7 +131,7 @@ cpLatEqCombine a b                    = cpLUP a b
 
 
 cpTransform :: [Annotated Env] -> Program
-cpTransform anns = map (mapAnn stmt) anns where
+cpTransform anns = map (interpAnn stmt) anns where
   stmt :: Env -> SubProg -> SubProg
   stmt env st = case st of
     Single (Skip    ) -> Single Skip

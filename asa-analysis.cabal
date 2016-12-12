@@ -20,6 +20,7 @@ library
                      , Text.Pretty, Anal.Available, Anal.ConstProp
                      , Data.CFG, Anal.DeadCode, Data.Lat, Anal, Utils
                      , Data.Cmm.Annotated, Data.Cmm.QuasiQuoter
+                     , Anal.Liveness
   -- other-modules:
   -- other-extensions:
   build-depends:       base >=4.7 && <4.8, mtl, containers, parsec, neat-interpolation
@@ -39,6 +40,8 @@ test-suite spec
                , Anal.OptimizationSpec
                , Data.Cmm.ParserSpec
                , Data.CFGSpec
-               , Data.AnnotatedSpec
+               , Data.Cmm.AnnotatedSpec
                , GraphVizGenSpec
-  build-depends: base  == 4.*, hspec == 2.*, neat-interpolation, asa-analysis, parsec
+  build-depends: base >=4.7 && <4.8, mtl, containers, parsec, neat-interpolation
+               , deepseq, regex-compat, template-haskell, syb, asa-analysis
+               , hspec == 2.*

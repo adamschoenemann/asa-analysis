@@ -24,20 +24,21 @@ data AnnAlg a b = AnnAlg
   , aaBlock :: [b] -> b -> b
   }
 
--- foldr :: (a -> b -> a) -> b -> [a] -> b
-mapAnn :: (a -> SubProg -> SubProg) -> Annotated a -> SubProg
-mapAnn fn ann = help ann where
+-- interpret annotated AST into a "plain" AST
+interpAnn :: (a -> SubProg -> SubProg) -> Annotated a -> SubProg
+interpAnn fn ann = help ann where
   help ann = case ann of
     ASingle a s    -> fn a (Single s)
     AITE a e bt bf -> fn a (ITE e (help bt) (help bf))
     AWhile a e bt  -> fn a (While e (help bt))
     ABlock as      -> Block (map help as)
 
+-- foldr :: (a -> b -> a) -> b -> [a] -> b
 foldAnn :: AnnAlg a b -> b -> Annotated a -> b
 foldAnn (AnnAlg stmt ite while block) seed annotated = help annotated seed where
   help ann acc =
     case ann of
-      ASingle a s      -> stmt a s acc
+      ASingle a s    -> stmt a s acc
       AITE a e bt bf -> ite a e (help bt seed) (help bf seed) acc
       AWhile a e bt  -> while a e (help bt seed) acc
       ABlock as      -> block (map (flip help $ seed) as) acc
@@ -52,23 +53,10 @@ annotatedToProg = map help where
   block bs acc      = s2s (concat bs) : acc
   s2s = stmtsToSubProg
 
--- annotatedToProg' :: [Annotated a] -> Program
--- annotatedToProg' anns = map help anns where
---   help ann =
---     case ann of
---       ASingle _ s -> s
---       AITE _ e t f ->
---         let tb = help t
---             fb = help f
---         in ITE e tb fb
---       AWhile _ e t ->
---         let tb = help t
---         in While e tb
---       ABlock xs -> Block $ foldr (:) [] $ annotatedToProg' xs
-
+-- forall a. is only used for ScopedTypeVariables
 cfgToAnnotated :: forall a. Lat a => Map ID a -> CFG -> [Annotated a]
 cfgToAnnotated envMap cfg = dfFoldCFGAlg alg cfg [] where
-  alg :: DFAlg [Annotated a]
+  alg :: DFAlg [Annotated a] -- here, ScopedTypeVariables is used
   alg = DFAlg { dfWhile = while, dfITE = ite, dfNSingle = single }
   single i s n =
     let env = getEnv i

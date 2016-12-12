@@ -1,5 +1,5 @@
 
-module AnnotatedSpec where
+module Data.Cmm.AnnotatedSpec where
 
 import Test.Hspec
 import Data.Cmm.Parser
