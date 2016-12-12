@@ -14,7 +14,7 @@ import Data.Functor ((<$>))
 import Control.Applicative ((<*>),(<*),(*>))
 import Utils
 
-program :: Parser [SubProg]
+program :: Parser Program
 program = spaces *> many (stmt <* spaces)
 
 stmt :: Parser SubProg
@@ -65,8 +65,8 @@ brackets x = between (char '{' <* spaces) (char '}') (x <* spaces)
 ident :: Parser String
 ident  = (:) <$> letter <*> many alphaNum
 
-unsafeParse :: String -> [SubProg]
+unsafeParse :: String -> Program
 unsafeParse p = either (error . show) id $ parse program "unsafe" p
 
-parseCmm :: String -> Either ParseError [SubProg]
+parseCmm :: String -> Either ParseError Program
 parseCmm p = parse program "cmm" p

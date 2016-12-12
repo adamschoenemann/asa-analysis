@@ -16,9 +16,9 @@ build-type:          Simple
 cabal-version:       >=1.10
 
 library
-  exposed-modules:     Data.Graph, Data.Cmm.Parser, Data.Cmm.AST
+  exposed-modules:     Data.Cmm.Parser, Data.Cmm.AST
                      , Text.Pretty, Anal.Available, Anal.ConstProp
-                     , Data.CFG, Anal.DeadCode, Data.Lat
+                     , Data.CFG, Anal.DeadCode, Data.Lat, Anal, Utils
                      , Data.Cmm.Annotated, Data.Cmm.QuasiQuoter
   -- other-modules:
   -- other-extensions:
@@ -32,4 +32,13 @@ test-suite spec
   ghc-options: -W -fno-warn-unused-matches
   hs-source-dirs: test
   main-is: Spec.hs
+  other-modules: Anal.AvailableSpec
+               , Anal.ConstPropSpec
+               , Anal.DeadCodeSpec
+               , Anal.LivenessSpec
+               , Anal.OptimizationSpec
+               , Data.Cmm.ParserSpec
+               , Data.CFGSpec
+               , Data.AnnotatedSpec
+               , GraphVizGenSpec
   build-depends: base  == 4.*, hspec == 2.*, neat-interpolation, asa-analysis, parsec

@@ -117,7 +117,7 @@ constProp :: Analysis Env
 constProp =
   Analysis { singleToTFun = cpSingleToTFun -- :: SubProg -> TFun
            , condToTFun = \e -> id
-           , initialEnv = cpInitial -- :: [SubProg] -> Set Expr
+           , initialEnv = cpInitial -- :: Program -> Set Expr
            , getDeps = forward (M.empty)
            }
 
@@ -142,7 +142,7 @@ cpLatEqCombine (CPBool _) (CPInt _)   = error "type error"
 cpLatEqCombine a b                    = cpLUP a b
 
 
-cpTransform :: [Annotated Env] -> [SubProg]
+cpTransform :: [Annotated Env] -> Program
 cpTransform anns = map (mapAnn stmt) anns where
   stmt :: Env -> SubProg -> SubProg
   stmt env st = case st of

@@ -70,7 +70,7 @@ cfgToGviz name (CFG m) =
 writeVizCfg :: CFG -> String -> IO ()
 writeVizCfg g name = writeFile ("./graphviz/" ++ name ++ ".dot") (cfgToGviz name g)
 
-progToCfg :: [SubProg] -> CFG
+progToCfg :: Program -> CFG
 progToCfg stmts =
   let ((i, fn), assoc') = runState (cfgSubProg 0 1 $ Block stmts) []
       (_, assoc)      = runState (fn (i+1)) assoc'
@@ -122,12 +122,12 @@ cfgSubProg p i stmt = case stmt of
 newNode :: Int -> Node -> CFGState ID
 newNode i n = modify ((i,n):) >> return i
 
-cfgToProgram :: CFG -> [SubProg]
+cfgToProgram :: CFG -> Program
 cfgToProgram g@(CFG nodes) =
   let source = unsafeLookup 0 nodes
   in  fst $ nodeToProgram (0,source) g
 
-nodeToProgram :: (ID,Node) -> CFG -> ([SubProg], ID)
+nodeToProgram :: (ID,Node) -> CFG -> (Program, ID)
 nodeToProgram n (CFG nodes) = help S.empty n proceed where
   getNode :: ID -> (ID, Node)
   getNode i = (i,unsafeLookup i nodes)
@@ -136,7 +136,7 @@ nodeToProgram n (CFG nodes) = help S.empty n proceed where
   stop   _ i next  = ([], i)
   stopIf j ex i next = if j == i then ([], i) else help ex (getNode next) (stopIf j)
 
-  help :: Set ID -> (ID, Node) -> (Set ID -> Int -> Int -> ([SubProg], ID)) -> ([SubProg], ID)
+  help :: Set ID -> (ID, Node) -> (Set ID -> Int -> Int -> (Program, ID)) -> (Program, ID)
   help ex (i, nd) handleConf
     | i `S.member` ex = ([], i)
     | otherwise =
@@ -153,13 +153,13 @@ nodeToProgram n (CFG nodes) = help S.empty n proceed where
     let (stmt', i) = help ex (getNode next) handleConf
     in  (stmt:stmt', i)
 
-  whileToProgram :: Set ID -> Expr -> In -> ID -> ID -> ([SubProg], ID)
+  whileToProgram :: Set ID -> Expr -> In -> ID -> ID -> (Program, ID)
   whileToProgram ex b trid flid c =
     let (tr, _) = help ex (getNode trid) (stopIf c)
         (fl, i)   = help ex (getNode flid) stop
     in (While b (stmtsToSubProg tr) : fl, i)
 
-  iteToProgram :: Set ID -> Expr -> ID -> ID -> ID -> ([SubProg], ID)
+  iteToProgram :: Set ID -> Expr -> ID -> ID -> ID -> (Program, ID)
   iteToProgram ex b trid flid c =
     let (tr,tcid)  = help ex (getNode trid) (stopIf c) -- (branch, true confluence id)
         (fl,fcid)  = help ex (getNode flid) (stopIf c) -- (brancid)

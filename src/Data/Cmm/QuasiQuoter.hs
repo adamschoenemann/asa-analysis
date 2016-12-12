@@ -13,7 +13,7 @@ cmm = QuasiQuoter
   , quoteType = undefined
   }
 
-quoteParseCmm :: Monad m => String -> m [SubProg]
+quoteParseCmm :: Monad m => String -> m Program
 quoteParseCmm s = either (fail . show) return $ parseCmm s
 
 quoteCmmExp s = do
@@ -21,7 +21,7 @@ quoteCmmExp s = do
   prog <- quoteParseCmm s
   dataToExpQ (const Nothing) prog
 
--- antiCmmPat :: [SubProg] -> Maybe (TH.Q TH.Pat)
+-- antiCmmPat :: Program -> Maybe (TH.Q TH.Pat)
 -- antiCmmPat
 
 

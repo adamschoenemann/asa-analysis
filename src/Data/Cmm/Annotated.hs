@@ -42,7 +42,7 @@ foldAnn (AnnAlg stmt ite while block) seed annotated = help annotated seed where
       AWhile a e bt  -> while a e (help bt seed) acc
       ABlock as      -> block (map (flip help $ seed) as) acc
 
-annotatedToProg :: [Annotated a] -> [SubProg]
+annotatedToProg :: [Annotated a] -> Program
 annotatedToProg = map help where
   help ann = s2s $ foldAnn alg [] ann
   alg = AnnAlg stmt ite while block
@@ -52,7 +52,7 @@ annotatedToProg = map help where
   block bs acc      = s2s (concat bs) : acc
   s2s = stmtsToSubProg
 
--- annotatedToProg' :: [Annotated a] -> [SubProg]
+-- annotatedToProg' :: [Annotated a] -> Program
 -- annotatedToProg' anns = map help anns where
 --   help ann =
 --     case ann of

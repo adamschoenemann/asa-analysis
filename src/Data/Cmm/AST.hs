@@ -59,12 +59,14 @@ instance Pretty Stmt where
 
 data SubProg
   = ITE Expr SubProg SubProg
-  | Block [SubProg]
+  | Block Program
   | While Expr SubProg
   | Single Stmt
   deriving (Eq, Ord, Show, Data, Typeable, Generic)
 
 instance NFData SubProg where
+
+type Program = [SubProg]
 
 ppSubProg :: Int -> SubProg -> String
 ppSubProg n stmt =
@@ -89,12 +91,12 @@ ppSubProg n stmt =
 instance Pretty SubProg where
   ppr = ppSubProg 0
 
-ppSubProgs :: Int -> [SubProg] -> String
+ppSubProgs :: Int -> Program -> String
 ppSubProgs n = unlines . map (ppSubProg n)
 
-instance Pretty [SubProg] where
+instance Pretty Program where
   ppr = ppSubProgs 0
 
-stmtsToSubProg :: [SubProg] -> SubProg
+stmtsToSubProg :: Program -> SubProg
 stmtsToSubProg [x] = x
 stmtsToSubProg xs  = Block xs

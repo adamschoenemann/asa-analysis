@@ -101,24 +101,24 @@ analyzeCFG anal cfg@(CFG nodes) = solveFix initial bigT where
   bigT = eqsToBigT eqs
   initial = M.map (const initialL) nodes
 
-analyzeProg :: Lat a => Analysis a -> [SubProg] -> Map ID a
+analyzeProg :: Lat a => Analysis a -> Program -> Map ID a
 analyzeProg anal prog = analyzeCFG anal (progToCfg prog)
 
-pprintAnalysis :: (Lat a, Pretty a) => Analysis a -> [SubProg] -> IO ()
+pprintAnalysis :: (Lat a, Pretty a) => Analysis a -> Program -> IO ()
 pprintAnalysis anal = mapM_ (\(i, r) -> putStrLn $ (show i ++ ": " ++ ppr r)) .
                         M.toList . analyzeProg anal
 
-printAnalysis :: (Lat a, Show a) => Analysis a -> [SubProg] -> IO ()
+printAnalysis :: (Lat a, Show a) => Analysis a -> Program -> IO ()
 printAnalysis anal = mapM_ (\(i, r) -> putStrLn $ (show i ++ ": " ++ show r)) .
                         M.toList . analyzeProg anal
 
 -- an analysis and a way to transform the cfg using that analysis
 data Optimization = forall a. Lat a =>
-  Opt { optTransform  :: [Annotated a] -> [SubProg]
+  Opt { optTransform  :: [Annotated a] -> Program
       , optAnalysis   :: Analysis  a
       }
 
-runOpt :: Optimization -> [SubProg] -> [SubProg]
+runOpt :: Optimization -> Program -> Program
 runOpt (Opt trans anal) prog =
   let cfg      = progToCfg prog
       analyzed = analyzeCFG anal cfg
@@ -127,18 +127,18 @@ runOpt (Opt trans anal) prog =
   in optimized
 
 -- run optb first and then opt a
-runOpts :: Optimization -> Optimization -> [SubProg] -> [SubProg]
+runOpts :: Optimization -> Optimization -> Program -> Program
 runOpts opta optb prog =
   let prog'  = runOpt optb prog
   in  runOpt opta prog'
 
-seqOpts :: [Optimization] -> ([SubProg] -> [SubProg])
+seqOpts :: [Optimization] -> (Program -> Program)
 seqOpts [] = id
 seqOpts [opt] = runOpt opt
 seqOpts (o:os) = foldr (\opt fn -> fn . runOpt opt) (runOpt o) os
 
 
-optimizeProg :: [Optimization] -> [SubProg] -> [SubProg]
+optimizeProg :: [Optimization] -> Program -> Program
 optimizeProg opts prog =
   let fixpoint =
         fix (\f prog -> let prog' = seqOpts opts prog
