@@ -7,14 +7,15 @@ For Automated Software Analysis at ITU 2016.
 serve as the entry points for new analyses and optimizations. There are a few
 different examples of analyses and optimizations in the `Anal.*` modules.
 The supporting modules are
-    - `Data.Cmm.AST` which represents the abstract syntax of the C-- language.
-    - `Data.Cmm.Parser` which parses C-- programs.
-    - `Data.CFG` which represents the control-flow graph of a C-- program.
-    - `Data.Lat` which contains the typeclass for Lattices
-    - `Text.Pretty` which contains a simple typeclass for pretty-printing
+
+- `Data.Cmm.AST` which represents the abstract syntax of the C-- language.
+- `Data.Cmm.Parser` which parses C-- programs.
+- `Data.CFG` which represents the control-flow graph of a C-- program.
+- `Data.Lat` which contains the typeclass for Lattices
+- `Text.Pretty` which contains a simple typeclass for pretty-printing
 
 ## TODO:
-- Write report and presentation
+- Done!
 
 ## DONE:
 - Allow for backwards analyses ✓
@@ -37,3 +38,4 @@ The supporting modules are
   points explicitly in the control-flow graph. Should also simplify the code
   alot in `compute`. ✓
 - Sequence multiple analyses into a "big" analysis ✓
+- Write report and presentation ✓
