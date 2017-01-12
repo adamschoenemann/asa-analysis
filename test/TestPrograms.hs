@@ -7,7 +7,7 @@ import Text.Regex
 import Data.Cmm.QuasiQuoter
 import Data.Cmm.AST
 
-in1, in2, in3, in4, in5, in6, in7, in8, in9, in10, in11, in12, in13 :: String
+in1, in2, in3, in4, in5, in6, in7, in8, in9, in10, in11, in12, in13, in14 :: String
 
 in1 =
   [string|
@@ -180,11 +180,25 @@ in13 =
     output x;
   |]
 
+in14 =
+  [string|
+  x := input;
+  y := 0;
+  while x > 0 do {
+    x := x - 1;
+    y := y + x;
+  }
+  while y < 10 do {
+    output y;
+    y := y + 1;
+  }
+  |]
+
 testPrograms :: [(String, String)]
 testPrograms =
   let progs =  [ ("in1", in1), ("in2", in2), ("in3", in3), ("in4", in4), ("in5", in5)
                , ("in6", in6), ("in7", in7), ("in8", in8), ("in9", in9), ("in10", in10)
-               , ("in11", in11), ("in12", in12), ("in13", in13)
+               , ("in11", in11), ("in12", in12), ("in13", in13), ("in14", in14)
                ]
       rgx = mkRegex "(\r\n)|\r|\n"
   in  map (\(n,p) -> (n, subRegex rgx p "\n")) progs

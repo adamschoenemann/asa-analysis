@@ -1,5 +1,8 @@
+{-
+Module defining programs that are annotated with information
+from an analysis
+-}
 {-# LANGUAGE ExistentialQuantification, ScopedTypeVariables #-}
--- annotated AST with lattice information
 module Data.Cmm.Annotated where
 
 import Data.CFG
@@ -8,20 +11,28 @@ import Data.Lat
 import Data.Map.Strict (Map)
 import Utils
 
-
+-- Like Data.Cmm.AST but with an annotation
 data Annotated a = ASingle a Stmt
                  | AITE a Expr (Annotated a) (Annotated a)
                  | AWhile a Expr (Annotated a)
                  | ABlock [Annotated a]
+
+-- injection from Program to [Annotated ()]
+injectProgram :: Program -> [Annotated ()]
+injectProgram = map inject where
+  inject (Single x)  = ASingle () x
+  inject (ITE b t f) = AITE () b (inject t) (inject f)
+  inject (While b t) = AWhile () b (inject t)
+  inject (Block xs)  = ABlock (map inject xs)
 
 -- annotated algebra for folding
 -- a is the annotated's type param
 -- b is the type of the accumulator
 data AnnAlg a b = AnnAlg
   { aaSubProg  :: a -> Stmt -> b -> b
-  , aaITE   :: a -> Expr -> b -> b -> b -> b
-  , aaWhile :: a -> Expr -> b -> b -> b
-  , aaBlock :: [b] -> b -> b
+  , aaITE      :: a -> Expr -> b -> b -> b -> b
+  , aaWhile    :: a -> Expr -> b -> b -> b
+  , aaBlock    :: [b] -> b -> b
   }
 
 -- interpret annotated AST into a "plain" AST
@@ -43,16 +54,19 @@ foldAnn (AnnAlg stmt ite while block) seed annotated = help annotated seed where
       AWhile a e bt  -> while a e (help bt seed) acc
       ABlock as      -> block (map (flip help $ seed) as) acc
 
+-- inverse of injectProgram
 annotatedToProg :: [Annotated a] -> Program
 annotatedToProg = map help where
   help ann = s2s $ foldAnn alg [] ann
   alg = AnnAlg stmt ite while block
-  stmt _ s acc  = Single s : acc
+  stmt _ s acc      = Single s : acc
   ite _ e bt bf acc = ITE e (s2s bt) (s2s bf) : acc
   while _ e bt acc  = While e (s2s bt) : acc
   block bs acc      = s2s (concat bs) : acc
   s2s = stmtsToSubProg
 
+-- Convert a CFG + the result of an analysis (solution to recursive equations)
+-- to an annotated AST.
 -- forall a. is only used for ScopedTypeVariables
 cfgToAnnotated :: forall a. Lat a => Map ID a -> CFG -> [Annotated a]
 cfgToAnnotated envMap cfg = dfFoldCFGAlg alg cfg [] where

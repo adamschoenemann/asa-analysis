@@ -20,12 +20,13 @@ program = spaces *> many (stmt <* spaces)
 stmt :: Parser SubProg
 stmt =  (const $ Single Skip) <$> trystring "skip" <* spaces <* char ';' <* spaces
     <|> ITE <$> (trystring "if" *> spaces1 *> expr) <*>
-                     (trystring "then" *> spaces1 *> stmt <* spaces) <*>
-                     (trystring "else" *> spaces1 *> stmt <* spaces)
+                (trystring "then" *> spaces1 *> stmt <* spaces) <*>
+                (trystring "else" *> spaces1 *> stmt <* spaces)
     <|> While <$> (trystring "while" *> spaces1 *> expr) <*>
-                     (trystring "do" *> spaces1 *> stmt) <* spaces
+                  (trystring "do" *> spaces1 *> stmt) <* spaces
     <|> (Single . Output) <$> (trystring "output" *> spaces1 *> expr <* char ';') <* spaces
-    <|> (\v e -> Single $ Ass v e) <$> (ident <* spaces) <*> (string ":=" *> spaces *> expr <* char ';') <* spaces
+    <|> (\v e -> Single $ Ass v e) <$> (ident <* spaces)
+                                   <*> (string ":=" *> spaces *> expr <* char ';') <* spaces
     <|> Block <$> (brackets block) <* spaces
       where
         block = sepBy stmt spaces

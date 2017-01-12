@@ -14,6 +14,9 @@ The supporting modules are
 - `Data.Lat` which contains the typeclass for Lattices
 - `Text.Pretty` which contains a simple typeclass for pretty-printing
 
+## Exam notes
+- `UnitLat` is superflous, and we might as well have used `Lat ()`
+
 ## TODO:
 - Done!
 

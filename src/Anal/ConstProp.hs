@@ -148,9 +148,9 @@ cpTransform anns = map (interpAnn stmt) anns where
       CPInt  i -> return $ ILit i
       CPBool b -> return $ BLit b
     isConst env e = case e of
-      Add e1 e2 -> cpLatIntCombine  (+)  (isConst env e1) (isConst env e2)
-      Sub e1 e2 -> cpLatIntCombine  (-)  (isConst env e1) (isConst env e2)
-      Mul e1 e2 -> cpLatIntCombine  (*)  (isConst env e1) (isConst env e2)
+      Add e1 e2 -> cpLatIntCombine       (+)  (isConst env e1) (isConst env e2)
+      Sub e1 e2 -> cpLatIntCombine       (-)  (isConst env e1) (isConst env e2)
+      Mul e1 e2 -> cpLatIntCombine       (*)  (isConst env e1) (isConst env e2)
       Gt  e1 e2 -> cpLatIntToBoolCombine (>)  (isConst env e1) (isConst env e2)
       Lt  e1 e2 -> cpLatIntToBoolCombine (<)  (isConst env e1) (isConst env e2)
       Eq  e1 e2 -> cpLatEqCombine (isConst env e1) (isConst env e2)
