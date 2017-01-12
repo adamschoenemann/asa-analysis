@@ -2,6 +2,28 @@
 # Analysis Framework
 For Automated Software Analysis at ITU 2016.
 
+## Building and running
+To build, you should use `stack build`.
+To test, you can use `stack test` or `stack repl --test` and then `Main.main`
+to run all the tests.
+
+It is a library, so you cannot really run it :) But to explore the code
+interactively, yo ucan use `stack repl --test` and now you should
+have loaded all the code into scope, along with the test classes.
+
+You can now access the test-programs as strings with `in1, in2 ... in14`.
+Parse them with `parseCmm` or `unsafeParse`.
+Print them after parsing with `ppr` or `putPrettyLn`
+There are some analyses available as `available, constProp, livenessAnal`.
+You can run an analysis on a program with
+`analyzeProgram :: Lat a => Analysis a -> Program -> Map ID a`.
+You can run a single optimization with `runOpt :: Optimization -> Program -> Program`.
+There are some optimizations available as `constPropOpt, deadCodeOpt`.
+Liveness and Available do not have optimizations yet.
+You can "fully" optimize a program with `optimizeProg :: [Optimization] -> Program -> Program`.
+
+
+
 ## Code Organization
 `Anal.hs` contains the `Analysis` type and the `Optimization` type. These types
 serve as the entry points for new analyses and optimizations. There are a few
@@ -16,9 +38,6 @@ The supporting modules are
 
 ## Exam notes
 - `UnitLat` is superflous, and we might as well have used `Lat ()`
-
-## TODO:
-- Done!
 
 ## DONE:
 - Allow for backwards analyses ✓
